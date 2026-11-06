@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.weiyi.business.ticket.infra.mapper.BDailyTrainMapper">
+
+    <!-- 到点状态扫描：未发车→运行中（当天已到发车时刻） -->
+    <update id="markRunning">
+        UPDATE b_daily_train
+        SET status = 1
+        WHERE ride_date = #{today}
+        AND status = 0
+        AND departure_time &lt;= #{now}
+    </update>
+
+    <!-- 到点状态扫描：不跨天车次（到达晚于出发）当天到达时刻已过 → 已到达 -->
+    <update id="markArrivedSameDay">
+        UPDATE b_daily_train
+        SET status = 2
+        WHERE ride_date = #{today}
+        AND status &lt; 2
+        AND arrival_time &lt;= #{now}
+        AND arrival_time &gt; departure_time
+    </update>
+
+    <!-- 到点状态扫描：跨天车次（到达早于出发即次日到）昨日发车今日到点 → 已到达 -->
+    <update id="markArrivedCrossDay">
+        UPDATE b_daily_train
+        SET status = 2
+        WHERE ride_date = #{yesterday}
+        AND status &lt; 2
+        AND arrival_time &lt;= #{now}
+        AND arrival_time &lt; departure_time
+    </update>
+
+    <!-- 到点状态扫描：前天及更早的车次（不跨天当天已到，跨天最多次日到）→ 已到达 -->
+    <update id="markArrivedBefore">
+        UPDATE b_daily_train
+        SET status = 2
+        WHERE ride_date &lt; #{deadline}
+        AND status &lt; 2
+    </update>
+
+</mapper>

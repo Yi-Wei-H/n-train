@@ -1,0 +1,4 @@
+/mvnw text eol=lf
+*.cmd text eol=crlf
+# shell 脚本部署到 Linux 服务器执行，禁止 CRLF（bad interpreter / \r 报错）
+*.sh text eol=lf

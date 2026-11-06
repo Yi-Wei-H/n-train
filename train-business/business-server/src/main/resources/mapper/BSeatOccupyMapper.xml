@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.weiyi.business.ticket.infra.mapper.BSeatOccupyMapper">
+
+    <!-- 下单占用记录批量 INSERT：多值单语句一次往返（自定义 SQL 不走 MP 雪花主键，id 由调用方预生成） -->
+    <insert id="insertBatch">
+        INSERT INTO b_seat_occupy (id, order_no, order_item_id, ride_date, train_code,
+                                   from_station, to_station, seat_type, carriage_no, row_no, col_no,
+                                   status, created_at, updated_at)
+        VALUES
+        <foreach collection="items" item="oc" separator=",">
+            (#{oc.id}, #{oc.orderNo}, #{oc.orderItemId}, #{oc.rideDate}, #{oc.trainCode},
+             #{oc.fromStation}, #{oc.toStation}, #{oc.seatType}, #{oc.carriageNo}, #{oc.rowNo}, #{oc.colNo},
+             #{oc.status}, #{oc.createdAt}, #{oc.updatedAt})
+        </foreach>
+    </insert>
+
+</mapper>

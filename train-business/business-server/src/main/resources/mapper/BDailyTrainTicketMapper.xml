@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.weiyi.business.ticket.infra.mapper.BDailyTrainTicketMapper">
+
+    <!-- 原子扣减余票：remaining >= n 才命中，返回受影响行数（防超卖核心） -->
+    <update id="deductRemaining">
+        UPDATE b_daily_train_ticket
+        SET remaining = remaining - #{count}
+        WHERE ride_date = #{rideDate}
+          AND train_code = #{trainCode}
+          AND from_station = #{fromStation}
+          AND to_station = #{toStation}
+          AND seat_type = #{seatType}
+          AND remaining &gt;= #{count}
+    </update>
+
+    <!-- 退票/关单回补余票（幂等由调用方 b_seat_occupy.status 条件更新保证） -->
+    <update id="increaseRemaining">
+        UPDATE b_daily_train_ticket
+        SET remaining = remaining + #{count}
+        WHERE ride_date = #{rideDate}
+          AND train_code = #{trainCode}
+          AND from_station = #{fromStation}
+          AND to_station = #{toStation}
+          AND seat_type = #{seatType}
+    </update>
+
+</mapper>

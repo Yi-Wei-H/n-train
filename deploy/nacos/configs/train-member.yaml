@@ -1,0 +1,68 @@
+# =====================================================================
+# Nacos 配置中心：train-member 的业务配置（dataId=train-member.yaml）
+# =====================================================================
+
+spring:
+  # 会员域独立库：账号/乘车人/钱包/流水
+  datasource:
+    url: jdbc:mysql://remotelist:3306/ntrain_member?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: root
+    password: ${MYSQL_ROOT_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 15
+      minimum-idle: 5
+  data:
+    redis:
+      host: remotelist
+      port: 6379
+      password: ${REDIS_PASSWORD}
+  cloud:
+    openfeign:
+      client:
+        config:
+          default:
+            # 调 business（下单/支付确认等）的读超时：必须 > business 下单重试总预算(4s)，
+            # 否则提前断连会在 business 侧留下"已提交但调用方已走"的幽灵订单窗口；
+            # Retryer 保持默认 NEVER_RETRY（非幂等 POST 禁止传输层重试），勿配置 Retryer bean
+            read-timeout: 5500
+            connect-timeout: 2000
+          train-agent:
+            # 注册后初始化 AI 授权行是附属动作：收紧超时，agent 不可用时快速失败走 agent 侧懒补建
+            connect-timeout: 1000
+            read-timeout: 2000
+
+rocketmq:
+  name-server: remotelist:9876
+  producer:
+    # 登录日志等事件的生产组
+    group: PG_MEMBER
+
+ntrain:
+  crypto:
+    # 敏感字段 AES 密钥
+    aes-key: ${NTRAIN_AES_KEY}
+  jwt:
+    secret: ${JWT_SECRET}
+  member:
+    # 支付时限权威配置在 business（ntrain.order.pay-timeout-minutes）；以下窗口/阈值控制验证码触发
+    # 图形验证码有效期（分钟）
+    captcha-code-cache: 1
+    # 模拟短信：把短信验证码回显到发送接口响应（接入真实短信网关后置 false）
+    mock-sms-echo: true
+    # 下单频次验证码：窗口秒数 / 阈值（窗口内超过阈值次 → 下次下单需图形验证码）
+    captcha-window-seconds: 60
+    captcha-threshold: 3
+    # 余票查询缓存秒数（逻辑过期：过期后返回旧值并异步重建）
+    ticket-cache-seconds: 60
+    # 余票缓存物理 TTL 秒数（兜底防泄漏）
+    ticket-cache-physical-seconds: 600
+    # 充值档位（余额上限 1000 由钱包本地事务 + DB CHECK 双重校验）
+    recharge-tiers: [10, 30, 50, 100, 200, 500]
+  user-defaults:
+    # 会员重置密码的默认值
+    member-password: ${MEMBER_DEFAULT_PASSWORD}
+
+logging:
+  level:
+    com.weiyi.member: info

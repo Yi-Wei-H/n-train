@@ -1,0 +1,3 @@
+com.weiyi.common.web.config.WebAutoConfiguration
+com.weiyi.common.web.config.JacksonWebConfig
+com.weiyi.common.web.config.CryptoAutoConfiguration

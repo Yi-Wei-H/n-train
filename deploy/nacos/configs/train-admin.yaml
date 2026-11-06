@@ -1,0 +1,47 @@
+# =====================================================================
+# Nacos 配置中心：train-admin 的业务配置（dataId=train-admin.yaml）
+# =====================================================================
+
+spring:
+  datasource:
+    url: jdbc:mysql://remotelist:3306/ntrain_admin?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: root
+    password: ${MYSQL_ROOT_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 15
+      minimum-idle: 5
+  data:
+    redis:
+      host: remotelist
+      port: 6379
+      password: ${REDIS_PASSWORD}
+  # agent 域 Feign 契约：连通性测试/远端模型列表/标题重生成是上游 LLM 同步调用，放宽读超时
+  cloud:
+    openfeign:
+      client:
+        config:
+          train-agent:
+            connect-timeout: 3000
+            read-timeout: 30000
+
+rocketmq:
+  name-server: remotelist:9876
+  producer:
+    # 本服务发送操作日志事件（切面采集写操作），并消费登录/操作日志事件落库
+    group: PG_ADMIN
+
+ntrain:
+  crypto:
+    # 敏感字段 AES 密钥
+    aes-key: ${NTRAIN_AES_KEY}
+  jwt:
+    secret: ${JWT_SECRET}
+  user-defaults:
+    # 重置密码的默认值
+    super-admin-password: ${SUPER_ADMIN_PASSWORD}
+    admin-password: ${ADMIN_DEFAULT_PASSWORD}
+
+logging:
+  level:
+    com.weiyi.admin: info

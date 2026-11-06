@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.weiyi.business.order.infra.mapper.BOrderMapper">
+
+    <!-- 过站巡检-上车：车已发离乘客上车站（无检票数据，以发离近似上车）→ 已支付订单转已出行。
+         order_status 条件即 CAS，与并发退款互斥，重复巡检幂等。 -->
+    <update id="markBoarding">
+        UPDATE b_order
+        SET order_status = #{toStatus}
+        WHERE ride_date = #{rideDate}
+        AND train_code = #{trainCode}
+        AND order_status = #{fromStatus}
+        AND from_station IN
+        <foreach collection="stations" item="st" open="(" separator="," close=")">#{st}</foreach>
+    </update>
+
+    <!-- 过站巡检-下车：车已到达乘客下车站 → 已出行订单转已完成 -->
+    <update id="markArrivedDest">
+        UPDATE b_order
+        SET order_status = #{toStatus}
+        WHERE ride_date = #{rideDate}
+        AND train_code = #{trainCode}
+        AND order_status = #{fromStatus}
+        AND to_station IN
+        <foreach collection="stations" item="st" open="(" separator="," close=")">#{st}</foreach>
+    </update>
+
+</mapper>

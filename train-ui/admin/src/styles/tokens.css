@@ -1,0 +1,298 @@
+/* ntrain 设计系统 v2 —— 管理端令牌
+   浅色 / 深色 / 跟随系统；深色按表面层级抬升，不做反色。 */
+:root {
+  color-scheme: light;
+
+  --action-bg: #0f62fe;
+  --action-hover: #0043ce;
+  --action-press: #002d9c;
+  --action-fg: #ffffff;
+  --action-text: #0043ce;
+  --action-soft: #edf5ff;
+  --action-soft-strong: #d0e2ff;
+  --ring: #0f62fe;
+
+  --brand-1: #0b4fd1;
+  --brand-2: #2f7cf6;
+
+  --price: #d92d20;
+  --danger: #d92d20;
+  --danger-text: #b42318;
+  --danger-soft: #fef3f2;
+
+  --success: #12b76a;
+  --success-text: #027a48;
+  --success-soft: #ecfdf3;
+  --warning: #f79009;
+  --warning-text: #b54708;
+  --warning-soft: #fffaeb;
+  --info: #667085;
+  --info-text: #475467;
+  --info-soft: #f2f4f7;
+
+  --bg-app: #ffffff;
+  --bg-page: #f5f6f7;
+  --bg-card: #ffffff;
+  --bg-subtle: #f2f3f5;
+  --bg-selected: #eaf2ff;
+  --bg-sidebar: #f8fafc;
+  --border: #e6e8eb;
+  --border-strong: #d0d5dd;
+  --text-1: #1d2129;
+  --text-2: #5a6069;
+  --text-3: #667085;
+  --inverse-bg: #1d2129;
+  --inverse-fg: #ffffff;
+  --overlay: rgba(16, 24, 40, .45);
+  --control-off: #c9cdd4;
+
+  --aside-bg: #ffffff;
+  --aside-text: #5a6069;
+  --aside-hover: #f2f4f7;
+  --aside-selected: #eaf2ff;
+  --aside-active: #0043ce;
+  --aside-group: #667085;
+  --aside-border: #e6e8eb;
+
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, .06);
+  --shadow-md: 0 4px 12px rgba(16, 24, 40, .08), 0 1px 3px rgba(16, 24, 40, .06);
+  --shadow-lg: 0 20px 40px rgba(16, 24, 40, .16), 0 4px 12px rgba(16, 24, 40, .08);
+
+  --r-control: 6px;
+  --r-panel: 10px;
+  --r-dialog: 14px;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", Roboto, Arial, system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+
+  --dur: 150ms;
+  --ease: cubic-bezier(.4, 0, .2, 1);
+
+  --aside-w: 232px;
+  --aside-w-collapsed: 64px;
+  --header-h: 56px;
+  --page-max: 1440px;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --action-bg: #2563eb;
+  --action-hover: #1d4ed8;
+  --action-press: #1e40af;
+  --action-fg: #ffffff;
+  --action-text: #93c5fd;
+  --action-soft: #1b2940;
+  --action-soft-strong: #23375a;
+  --ring: #60a5fa;
+
+  --brand-1: #123a7a;
+  --brand-2: #1d4ed8;
+
+  --price: #ff8a8a;
+  --danger: #d92d20;
+  --danger-text: #ff9b9b;
+  --danger-soft: #3a1d1d;
+
+  --success: #12b76a;
+  --success-text: #6ce9a6;
+  --success-soft: #123a2a;
+  --warning: #f79009;
+  --warning-text: #fec84b;
+  --warning-soft: #3b2a12;
+  --info: #98a2b3;
+  --info-text: #b8c0cc;
+  --info-soft: #272d36;
+
+  --bg-app: #16181c;
+  --bg-page: #121418;
+  --bg-card: #1e2228;
+  --bg-subtle: #262b33;
+  --bg-selected: #1b2940;
+  --bg-sidebar: #121418;
+  --border: #2e343d;
+  --border-strong: #434b57;
+  --text-1: #e5e7eb;
+  --text-2: #a9b1bc;
+  --text-3: #8a94a1;
+  --inverse-bg: #e5e7eb;
+  --inverse-fg: #16181c;
+  --overlay: rgba(0, 0, 0, .62);
+  --control-off: #4b5563;
+
+  --aside-bg: #121418;
+  --aside-text: #a9b1bc;
+  --aside-hover: #1e2228;
+  --aside-selected: #1b2940;
+  --aside-active: #93c5fd;
+  --aside-group: #8a94a1;
+  --aside-border: #2e343d;
+
+  --shadow-sm: 0 0 0 1px rgba(255, 255, 255, .06), 0 1px 2px rgba(0, 0, 0, .5);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, .45), 0 1px 3px rgba(0, 0, 0, .4);
+  --shadow-lg: 0 20px 40px rgba(0, 0, 0, .55), 0 4px 12px rgba(0, 0, 0, .45);
+}
+
+/* 跟随系统：auto 时由媒体查询接管；手动 light/dark 覆盖系统 */
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="auto"] {
+    color-scheme: dark;
+
+    --action-bg: #2563eb;
+    --action-hover: #1d4ed8;
+    --action-press: #1e40af;
+    --action-fg: #ffffff;
+    --action-text: #93c5fd;
+    --action-soft: #1b2940;
+    --action-soft-strong: #23375a;
+    --ring: #60a5fa;
+
+    --brand-1: #123a7a;
+    --brand-2: #1d4ed8;
+
+    --price: #ff8a8a;
+    --danger: #d92d20;
+    --danger-text: #ff9b9b;
+    --danger-soft: #3a1d1d;
+
+    --success: #12b76a;
+    --success-text: #6ce9a6;
+    --success-soft: #123a2a;
+    --warning: #f79009;
+    --warning-text: #fec84b;
+    --warning-soft: #3b2a12;
+    --info: #98a2b3;
+    --info-text: #b8c0cc;
+    --info-soft: #272d36;
+
+    --bg-app: #16181c;
+    --bg-page: #121418;
+    --bg-card: #1e2228;
+    --bg-subtle: #262b33;
+    --bg-selected: #1b2940;
+    --bg-sidebar: #121418;
+    --border: #2e343d;
+    --border-strong: #434b57;
+    --text-1: #e5e7eb;
+    --text-2: #a9b1bc;
+    --text-3: #8a94a1;
+    --inverse-bg: #e5e7eb;
+    --inverse-fg: #16181c;
+    --overlay: rgba(0, 0, 0, .62);
+    --control-off: #4b5563;
+
+    --aside-bg: #121418;
+    --aside-text: #a9b1bc;
+    --aside-hover: #1e2228;
+    --aside-selected: #1b2940;
+    --aside-active: #93c5fd;
+    --aside-group: #8a94a1;
+    --aside-border: #2e343d;
+
+    --shadow-sm: 0 0 0 1px rgba(255, 255, 255, .06), 0 1px 2px rgba(0, 0, 0, .5);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, .45), 0 1px 3px rgba(0, 0, 0, .4);
+    --shadow-lg: 0 20px 40px rgba(0, 0, 0, .55), 0 4px 12px rgba(0, 0, 0, .45);
+  }
+}
+
+/* 切主题时暂停过渡，避免整页颜色渐变 */
+.theme-switching *,
+.theme-switching *::before,
+.theme-switching *::after {
+  transition: none !important;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  background: var(--bg-page);
+  color: var(--text-1);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+a {
+  color: var(--action-text);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.num {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.text-success {
+  color: var(--success-text);
+}
+
+.text-muted {
+  color: var(--text-3);
+}
+
+.text-danger {
+  color: var(--danger-text);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  background-clip: content-box;
+  border: 3px solid transparent;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}

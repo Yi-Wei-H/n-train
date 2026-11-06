@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.weiyi.business.ticket.infra.mapper.BSkTokenMapper">
+
+    <!-- 成功订单消耗令牌：remaining > 0 才命中（闸门宁松勿紧，扣不动不拦单） -->
+    <update id="consume">
+        UPDATE b_sk_token
+        SET remaining = remaining - 1
+        WHERE ride_date = #{rideDate}
+          AND train_code = #{trainCode}
+          AND remaining &gt; 0
+    </update>
+
+    <!-- 补偿加量：令牌耗尽但仍有余票时，累计发放与剩余同步加 -->
+    <update id="topup">
+        UPDATE b_sk_token
+        SET total_count = total_count + #{step},
+            remaining   = remaining + #{step}
+        WHERE ride_date = #{rideDate}
+          AND train_code = #{trainCode}
+    </update>
+
+</mapper>

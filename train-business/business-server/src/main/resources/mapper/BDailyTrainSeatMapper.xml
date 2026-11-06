@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.weiyi.business.ticket.infra.mapper.BDailyTrainSeatMapper">
+
+    <!-- 批量占座：CASE id 单语句一次往返完成 N 行（新位图由调用方 SeatBitmap.mark 后传入；
+         WHERE id IN 满足防全表更新拦截器要求） -->
+    <update id="batchUpdateSell">
+        UPDATE b_daily_train_seat
+        SET sell = CASE id
+        <foreach collection="seats" item="s">
+            WHEN #{s.id} THEN #{s.sell}
+        </foreach>
+        END,
+        updated_at = CURRENT_TIMESTAMP
+        WHERE id IN
+        <foreach collection="seats" item="s" open="(" separator="," close=")">#{s.id}</foreach>
+    </update>
+
+    <!-- 区间空闲过滤（仅系统分配路径）：SUBSTRING(sell, from+1, to-from) 恰为下标 [from, to)
+         的字符（1 起算折算），NOT LIKE '%1%' 等价于 SeatBitmap.isFree 全 0 判定；
+         谓词列全在覆盖索引 idx_seat_idle 内，过滤在索引层完成免回表，排序与全量查询一致 -->
+    <select id="selectIdleInRange" resultType="com.weiyi.business.ticket.infra.entity.BDailyTrainSeat">
+        SELECT id, ride_date, train_code, carriage_no, row_no, col_no, seat_type, sell,
+               created_at, updated_at
+        FROM b_daily_train_seat
+        WHERE ride_date = #{rideDate}
+          AND train_code = #{trainCode}
+          AND seat_type = #{seatType}
+          AND SUBSTRING(sell, #{fromIdx} + 1, #{toIdx} - #{fromIdx}) NOT LIKE '%1%'
+        ORDER BY carriage_no, row_no, col_no
+    </select>
+
+</mapper>

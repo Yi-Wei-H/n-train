@@ -1,0 +1,128 @@
+# =====================================================================
+# Nacos 配置中心：train-agent 的业务配置（dataId=train-agent.yaml）
+# =====================================================================
+
+logging:
+  level:
+    com.weiyi.agent: info
+
+spring:
+  datasource:
+    url: jdbc:postgresql://remotelist:5432/ntrain_agent?options=-c%20TimeZone=Asia/Shanghai
+    username: root
+    password: ${PG_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+
+  data:
+    redis:
+      host: remotelist
+      port: 6379
+      password: ${REDIS_PASSWORD}
+
+  ai:
+    # 禁用自动重试机制，让异常立即返回
+    retry:
+      max-attempts: 1  # 不重试，失败立即返回
+      on-client-errors: false
+    # PostgreSQL Vector Store配置
+    vectorstore:
+      pgvector:
+        index-type: HNSW
+        distance-type: COSINE_DISTANCE
+        # 向量维度数
+        dimensions: 1024
+        # 开发环境设置为 true，方便快速启动。生产环境设置为 false，手动管理数据库 schema，避免意外变更。
+        initialize-schema: false
+        remove-existing-vector-store-table: true  # 保留现有表和数据
+
+  threads:
+    virtual:
+      enabled: true
+
+  autoconfigure:
+    exclude: org.springframework.ai.vectorstore.pgvector.autoconfigure.PgVectorStoreAutoConfiguration
+
+rocketmq:
+  name-server: remotelist:9876
+  producer:
+    # 会话标题生成消息生产组（agent 域内自产自销，方案 C）
+    group: PG_AGENT
+
+ntrain:
+  crypto:
+    # 敏感字段 AES 密钥
+    aes-key: ${NTRAIN_AES_KEY}
+  mybatis:
+    # 分页方言（common-mybatis 统一装配，agent 为 PG；主仓四个 MySQL 服务用默认值 MYSQL）
+    db-type: POSTGRE_SQL
+  agent:
+    temperature: 0.2
+    defaultAnthropicMaxTokens: 4096
+    dimensions: 1024
+    # 聊天上下文的消息条数
+    messageCount: 20
+    # 提示词模板路径：key=场景-角色，缺省 classpath:prompts/<key>.st；Nacos 只调路径，正文随应用发布
+    prompts:
+      intent-router-system: classpath:prompts/intent-router-system.st
+      intent-router-user: classpath:prompts/intent-router-user.st
+      task-switch-system: classpath:prompts/task-switch-system.st
+      task-switch-user: classpath:prompts/task-switch-user.st
+      clarify-system: classpath:prompts/clarify-system.st
+      clarify-user: classpath:prompts/clarify-user.st
+      chat-system: classpath:prompts/chat-system.st
+      chat-user: classpath:prompts/chat-user.st
+      query-system: classpath:prompts/query-system.st
+      query-user: classpath:prompts/query-user.st
+      buy-system: classpath:prompts/buy-system.st
+      buy-user: classpath:prompts/buy-user.st
+      refund-system: classpath:prompts/refund-system.st
+      refund-user: classpath:prompts/refund-user.st
+      title-naming-system: classpath:prompts/title-naming-system.st
+      title-naming-user: classpath:prompts/title-naming-user.st
+      memory-extraction-system: classpath:prompts/memory-extraction-system.st
+      memory-extraction-user: classpath:prompts/memory-extraction-user.st
+      conversation-summary-system: classpath:prompts/conversation-summary-system.st
+      conversation-summary-user: classpath:prompts/conversation-summary-user.st
+      rag-system: classpath:prompts/rag-system.st
+      rag-user: classpath:prompts/rag-user.st
+    # 输入与内容安全：词表默认在代码（随安全评审发版），Nacos 仅可覆盖；高危词命中拒绝、敏感词命中固定安全回复
+    security:
+      max-input-length: 2000
+      max-request-body-bytes: 32768
+      safeguard-response: "抱歉，我只能协助车票与出行相关的请求。"
+      # high-risk-words: [赌博, 色情, 暴恐]
+      # sensitive-words: [赌博, 色情, 暴恐]
+    # 会话工作记忆（FSM 状态/工具引用/待确认单镜像）：TTL 分钟数，随读写滑动续期
+    memory:
+      work-ttl-minutes: 30
+      # 单轮注入长期记忆最大条数
+      max-injected-items: 20
+      # 记忆正文最大长度（字符）
+      max-content-length: 200
+      # 会话摘要触发阈值（未压缩轮数）
+      summary-threshold-rounds: 20
+      # 摘要输出最大长度（字符）
+      summary-max-length: 1000
+      # 结构化输出总尝试次数（首次 + 修复重试）
+      structured-max-attempts: 2
+      # 自动提炼候选采纳最低置信度
+      extraction-min-confidence: 0.8
+    # 意图路由：置信阈值与路由上下文轮数
+    router:
+      confidence-threshold: 0.6
+      router-message-count: 6
+    # 写操作确认摘要有效期（分钟），独立计时，不随工作记忆 TTL 续期延长
+    confirm:
+      ttl-minutes: 5
+    # 会话生命周期：72h 翻篇与主回复占用回收
+    # 主回复流：SSE 连接超时（毫秒）——思考型模型长回复超过一分钟属常态
+    chat:
+      sse-timeout-millis: 180000
+    conversation:
+      # 空闲翻篇阈值（小时）：距上次有效交互超过该值翻篇旧会话
+      idle-timeout-hours: 72
+      # 主回复占用超时（秒）：超过视为孤儿占用回收（实例崩溃兜底）
+      busy-expire-seconds: 180
+      # 首轮标题流内探测周期/最长持续（毫秒）
+      title-probe-interval-millis: 2500
+      title-probe-max-millis: 30000

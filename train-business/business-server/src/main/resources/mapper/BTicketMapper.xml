@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.weiyi.business.order.infra.mapper.BTicketMapper">
+
+    <!-- 过站巡检-上车：车票随订单转已出行（待乘车 → 已出行）。b_ticket 自带乘车信息，
+         条件更新幂等，退票中的车票因状态不匹配不会被误碰。 -->
+    <update id="markTraveledByStations">
+        UPDATE b_ticket
+        SET ticket_status = #{toStatus}
+        WHERE ride_date = #{rideDate}
+        AND train_code = #{trainCode}
+        AND from_station IN
+        <foreach collection="stations" item="st" open="(" separator="," close=")">#{st}</foreach>
+        AND ticket_status = #{fromStatus}
+    </update>
+
+</mapper>

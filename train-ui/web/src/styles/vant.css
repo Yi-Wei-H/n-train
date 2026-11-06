@@ -1,0 +1,216 @@
+/* Vant 组件映射到设计系统 v2 令牌：组件只认变量，不直接写色值 */
+:root {
+  --van-primary-color: var(--action-bg);
+  --van-success-color: var(--success);
+  --van-danger-color: var(--danger);
+  --van-warning-color: var(--warning);
+  --van-text-color: var(--text-1);
+  --van-text-color-2: var(--text-2);
+  --van-text-color-3: var(--text-3);
+  --van-active-color: var(--bg-subtle);
+  --van-background: var(--bg-page);
+  --van-background-2: var(--bg-card);
+  --van-background-3: var(--bg-card);
+  --van-border-color: var(--border);
+  --van-gray-3: var(--border);
+  --van-gray-4: var(--border-strong);
+  --van-gray-6: var(--text-3);
+  --van-gray-7: var(--text-2);
+  --van-gray-8: var(--text-1);
+
+  --van-cell-background: var(--bg-card);
+  --van-cell-text-color: var(--text-1);
+  --van-cell-label-color: var(--text-2);
+  --van-cell-value-color: var(--text-2);
+  --van-cell-font-size: 15px;
+  --van-cell-line-height: 24px;
+  --van-cell-vertical-padding: 12px;
+  --van-cell-horizontal-padding: 16px;
+
+  --van-field-label-color: var(--text-2);
+  --van-field-input-text-color: var(--text-1);
+  --van-field-placeholder-text-color: var(--text-3);
+
+  --van-button-primary-background: var(--action-bg);
+  --van-button-primary-border-color: var(--action-bg);
+  --van-button-primary-color: var(--action-fg);
+  --van-button-danger-background: var(--danger);
+  --van-button-danger-border-color: var(--danger);
+  --van-button-default-background: var(--bg-card);
+  --van-button-default-border-color: var(--border-strong);
+  --van-button-default-color: var(--text-1);
+  --van-button-radius: var(--r-control);
+
+  --van-dialog-background: var(--bg-card);
+  --van-dialog-border-radius: var(--r-dialog);
+  --van-dialog-width: min(400px, 90%);
+  --van-popup-background: var(--bg-card);
+  --van-overlay-background: var(--overlay);
+
+  --van-nav-bar-background: var(--bg-card);
+  --van-nav-bar-title-text-color: var(--text-1);
+  --van-nav-bar-icon-color: var(--text-1);
+  --van-nav-bar-text-color: var(--action-text);
+  --van-nav-bar-height: var(--nav-h);
+
+  --van-toast-background: var(--bg-card);
+  --van-toast-text-color: var(--text-1);
+  --van-picker-background: var(--bg-card);
+  --van-tabbar-background: var(--bg-card);
+  --van-tabbar-item-text-color: var(--text-3);
+  --van-tabbar-item-active-color: var(--action-text);
+  --van-tabbar-height: var(--tabbar-h);
+}
+
+.van-button {
+  font-family: var(--font-sans);
+}
+
+.van-button--round {
+  border-radius: 9999px;
+}
+
+.van-button--primary {
+  font-weight: 600;
+}
+
+.van-button--small {
+  height: 32px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+
+.van-cell {
+  background: var(--bg-card);
+  color: var(--text-1);
+}
+
+.van-cell::after {
+  border-color: var(--border);
+}
+
+.van-cell__label {
+  margin-top: 2px;
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.van-cell__value {
+  color: var(--text-2);
+}
+
+.van-cell-group--inset {
+  margin: 0 var(--page-pad);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--r-panel);
+}
+
+.van-field__label {
+  color: var(--text-2);
+  font-size: 14px;
+}
+
+.van-field__control {
+  color: var(--text-1);
+  font-size: 16px;
+}
+
+.van-field__control::placeholder {
+  color: var(--text-3);
+}
+
+.van-popup--bottom.van-popup--round {
+  border-radius: var(--r-dialog) var(--r-dialog) 0 0;
+}
+
+.van-popup--round.van-popup--center {
+  border-radius: var(--r-dialog);
+}
+
+.van-overlay {
+  background: var(--overlay);
+}
+
+.van-dialog {
+  background: var(--bg-card);
+  border-radius: var(--r-dialog);
+  overflow: hidden;
+}
+
+.van-dialog__header {
+  padding: 20px 20px 16px;
+  color: var(--text-1);
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 600;
+}
+
+.van-dialog__message {
+  padding: 0 20px 20px;
+  color: var(--text-2);
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.van-dialog__footer {
+  border-top: 1px solid var(--border);
+}
+
+.van-dialog__cancel,
+.van-dialog__confirm {
+  height: 48px;
+  font-size: 15px;
+}
+
+.van-dialog__cancel {
+  color: var(--text-2);
+}
+
+.van-dialog__confirm {
+  color: var(--action-text);
+  font-weight: 600;
+}
+
+.van-loading {
+  color: var(--action-bg);
+}
+
+.van-loading__text {
+  color: var(--text-3);
+  font-size: 13px;
+}
+
+.van-pull-refresh__head {
+  color: var(--text-3);
+  font-size: 13px;
+}
+
+.van-list__loading,
+.van-list__finished-text,
+.van-list__error-text {
+  color: var(--text-3);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.van-toast {
+  background: var(--bg-card);
+  color: var(--text-1);
+}
+
+.van-search {
+  padding: 0;
+  background: transparent;
+}
+
+.van-search__content {
+  padding-left: 12px;
+  border-radius: 8px;
+  background: var(--bg-subtle);
+}
+
+.van-field__left-icon {
+  color: var(--text-3);
+}

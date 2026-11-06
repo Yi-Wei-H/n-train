@@ -1,0 +1,51 @@
+# ============ 隐私凭证（统一放 secrets/，整目录排除）============
+# 只放行变量模板：真实凭证即使不叫 .env（如 service.env.bak、导出配置）也不会入库
+secrets/*
+!secrets/.env.example
+
+# 任何位置的 .env / 密钥文件一律不入库（模板 .env.example 除外）
+*.env
+!*.env.example
+
+# ============ 构建产物 ============
+target/
+build/
+out/
+*.class
+*.jar
+!/.mvn/wrapper/maven-wrapper.jar
+
+# ============ IDE ============
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+.gradle/
+
+# ============ 前端 ============
+node_modules/
+dist/
+.vite/
+npm-debug.log*
+
+# ============ 运行时 ============
+logs/
+log/
+*.log
+.DS_Store
+Thumbs.db
+
+# ============ 工具会话目录 ============
+CLAUDE.md
+.workbuddy/
+.claude/
+.zcode/
+
+# Python 运行产物（禁止入库，可能含敏感信息）
+__pycache__/
+*.pyc
+
+# ============其他===========
+doc/

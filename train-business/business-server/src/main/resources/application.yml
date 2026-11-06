@@ -1,0 +1,35 @@
+server:
+  port: 8005
+
+spring:
+  application:
+    name: train-business
+  profiles:
+    active: dev
+  config:
+    import:
+      - optional:nacos:train-business.yaml
+  cloud:
+    nacos:
+      # 主机名经 hosts 解析（见 deploy/hosts.example），配置禁止写死 IP/localhost
+      server-addr: remotelist:8848
+      # Nacos 已开鉴权：凭证由启动环境注入，禁止写默认值（取值见 deploy/README.md）
+      username: ${NACOS_USERNAME}
+      password: ${NACOS_PASSWORD}
+      config:
+        file-extension: yaml
+
+mybatis-plus:
+  # 自定义 SQL 的 mapper.xml 位置（通用 CRUD 仍由 MP BaseMapper 提供）
+  mapper-locations: classpath*:mapper/**/*.xml
+  global-config:
+    banner: false
+    db-config:
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+  configuration:
+    map-underscore-to-camel-case: true
+
+# 数据源/Redis/RocketMQ/AES/支付时限/巡检重试/日志级别
+# → 全在 Nacos（dataId=train-business.yaml，落地文件 deploy/nacos/configs/train-business.yaml）

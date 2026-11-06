@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.weiyi.business.order.infra.mapper.BOrderItemMapper">
+
+    <!-- 下单明细批量 INSERT：多值单语句一次往返（MP 自动填充/雪花主键不覆盖自定义 SQL，
+         id/created_at/updated_at 均由调用方预生成；id_card_no 走 AES 加密 handler） -->
+    <insert id="insertBatch">
+        INSERT INTO b_order_item (id, order_id, member_id, passenger_id, passenger_name, id_card_no,
+                                  ticket_type, seat_type, carriage_no, seat_no, from_station, to_station,
+                                  price, item_status, created_at, updated_at)
+        VALUES
+        <foreach collection="items" item="it" separator=",">
+            (#{it.id}, #{it.orderId}, #{it.memberId}, #{it.passengerId}, #{it.passengerName},
+             #{it.idCardNo, jdbcType=VARCHAR, typeHandler=com.weiyi.common.mybatis.handler.AesCryptoTypeHandler},
+             #{it.ticketType}, #{it.seatType}, #{it.carriageNo}, #{it.seatNo},
+             #{it.fromStation}, #{it.toStation}, #{it.price}, #{it.itemStatus},
+             #{it.createdAt}, #{it.updatedAt})
+        </foreach>
+    </insert>
+
+    <!-- 过站巡检-上车：明细随订单转已出行。经 b_order 锚定（明细无日期车次字段），
+         只看明细自身旧状态、不依赖订单新状态，批量中断后重跑可自愈补账。 -->
+    <update id="markTraveledByStations">
+        UPDATE b_order_item i
+        JOIN b_order o ON i.order_id = o.id
+        SET i.item_status = #{toStatus}
+        WHERE o.ride_date = #{rideDate}
+        AND o.train_code = #{trainCode}
+        AND o.from_station IN
+        <foreach collection="stations" item="st" open="(" separator="," close=")">#{st}</foreach>
+        AND i.item_status = #{fromStatus}
+    </update>
+
+</mapper>

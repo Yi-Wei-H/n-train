@@ -1,0 +1,23 @@
+server:
+  port: 8000
+
+spring:
+  application:
+    name: train-gateway
+  profiles:
+    active: dev
+  config:
+    import:
+      - optional:nacos:train-gateway.yaml
+  cloud:
+    nacos:
+      # 主机名经 hosts 解析到远程服务器公网 IP（见 deploy/hosts.example），配置禁止写死 IP/localhost
+      server-addr: remotelist:8848
+      # Nacos 已开鉴权：凭证由启动环境注入，禁止写默认值（取值见 deploy/README.md）
+      username: ${NACOS_USERNAME}
+      password: ${NACOS_PASSWORD}
+      config:
+        file-extension: yaml
+
+# 路由表 / CORS / 登录白名单 / JWT 密钥引用 / 日志级别 → 全在 Nacos
+# （dataId=train-gateway.yaml，落地文件 deploy/nacos/configs/train-gateway.yaml；改路由保存即热刷新，无需重启）

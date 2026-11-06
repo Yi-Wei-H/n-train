@@ -1,0 +1,35 @@
+server:
+  port: 8004
+
+spring:
+  application:
+    name: train-agent
+  profiles:
+    active: dev
+  config:
+    import:
+      - optional:nacos:train-agent.yaml
+  cloud:
+    nacos:
+      # 主机名经 hosts 解析到本机（见 deploy/hosts.example），配置禁止写死 IP/localhost
+      server-addr: remotelist:8848
+      # Nacos 已开鉴权：凭证由启动环境注入，禁止写默认值（取值见 deploy/README.md）
+      username: ${NACOS_USERNAME}
+      password: ${NACOS_PASSWORD}
+      config:
+        file-extension: yaml
+
+mybatis-plus:
+  mapper-locations: classpath*:mapper/**/*.xml
+  # PG timestamptz 与 LocalDateTime 桥接（内置处理器读取 timestamptz 会抛异常），见 PgLocalDateTimeTypeHandler
+  type-handlers-package: com.weiyi.agent.server.mybatis
+  global-config:
+#   关闭启动图标
+    banner: false
+    db-config:
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+  configuration:
+#   蛇形（表字段）转驼峰（类字段）
+    map-underscore-to-camel-case: true

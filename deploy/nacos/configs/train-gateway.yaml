@@ -1,0 +1,71 @@
+# =====================================================================
+# Nacos 配置中心：train-gateway 的业务配置（dataId=train-gateway.yaml）
+# 路由表/CORS 在此维护：保存后热刷新生效（无需重启网关）
+# SC 2025.x 起属性前缀为 spring.cloud.gateway.server.webflux（旧前缀被静默忽略，不可回退）
+# =====================================================================
+
+spring:
+  cloud:
+    gateway:
+      server:
+        webflux:
+          routes:
+            - id: member
+              uri: lb://train-member
+              predicates:
+                - Path=/api/member/**
+              filters:
+                - StripPrefix=2   # 剥掉 /api/member 两段：/api/member/user/login → /user/login
+            - id: admin
+              uri: lb://train-admin
+              predicates:
+                - Path=/api/admin/**
+              filters:
+                - StripPrefix=2   # /api/admin/auth/login → /auth/login
+            - id: task
+              uri: lb://train-task
+              predicates:
+                - Path=/api/task/**
+              filters:
+                - StripPrefix=2   # /api/task/job/query → /job/query（定时任务管理台）
+            - id: agent
+              uri: lb://train-agent
+              predicates:
+                - Path=/api/agent/**
+              filters:
+                - StripPrefix=2
+          globalcors:
+            cors-configurations:
+              '[/**]':
+                # 生产经 nginx 同源代理，浏览器视角同源；如前端直连网关，请改为具体域名/IP
+                allowedOriginPatterns: "*"
+                allowedMethods: "*"
+                allowedHeaders: "*"
+                exposedHeaders: [ "X-Trace-Id" ]
+                allowCredentials: true
+                maxAge: 3600
+
+ntrain:
+  jwt:
+    secret: ${JWT_SECRET}
+  auth:
+    # 免登录白名单（网关侧）
+    whitelist:
+      - /api/member/user/login
+      - /api/member/user/register
+      - /api/member/user/public-key
+      - /api/member/user/send-code
+      - /api/member/captcha
+      - /api/member/ticket/stations
+      - /api/member/ticket/query
+      - /api/admin/auth/login
+      - /api/admin/auth/public-key
+      - /**/v3/api-docs/**
+      - /actuator/**
+    # 可信代理地址：网关直连对端在列表内才采信其追加的 X-Forwarded-For 末段并注入 X-Client-IP；
+    trusted-proxies:
+      - 127.0.0.1
+
+logging:
+  level:
+    com.weiyi.gateway: info

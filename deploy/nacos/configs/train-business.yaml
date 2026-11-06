@@ -1,0 +1,60 @@
+# =====================================================================
+# Nacos 配置中心：train-business 的业务配置（dataId=train-business.yaml）
+# =====================================================================
+
+spring:
+  # 业务域单库（root 账户统一连接）：列车 b_train*/b_station* + 订单 b_order*/b_payment/b_ticket/b_refund_batch
+  # 连接池（单库合并了列车+订单两域，适度放大）
+  datasource:
+    # rewriteBatchedStatements：JDBC 批量在驱动层改写为多值/多语句单次往返，下单批量写依赖此开关
+    url: jdbc:mysql://remotelist:3306/ntrain_business?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true
+    username: root
+    password: ${MYSQL_ROOT_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 15
+      minimum-idle: 5
+      connection-timeout: 5000
+  data:
+    redis:
+      host: remotelist
+      port: 6379
+      password: ${REDIS_PASSWORD}
+
+rocketmq:
+  name-server: remotelist:9876
+  producer:
+    # 事务消息（关单/退款确认）与延迟消息（超时关单）的生产组
+    group: PG_BUSINESS
+
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.nologging.NoLoggingImpl
+
+ntrain:
+  crypto:
+    # 敏感字段 AES 密钥
+    aes-key: ${NTRAIN_AES_KEY}
+  order:
+    # 支付时限（分钟）：下单时按此换算覆盖档位延迟消息，消费端按实际截止时间复判 re-arm；
+    # H5 倒计时须与此对齐
+    pay-timeout-minutes: 15
+    # 下单请求级重试：总尝试上限/总预算/单次锁等待上限（等待 = min(剩余预算, 锁等待上限)）。
+    # 预算链：前端/网关超时 > member Feign readTimeout(5.5s) > 重试总预算(4s) > 单次锁等待(3s)
+    create-max-attempts: 3
+    create-retry-budget: 4s
+    create-lock-wait-max: 3000ms
+  job:
+    # 过站巡检批量失败后的重试次数，仍失败降级逐单兜底
+    sweep-retry: 1
+  sk-token:
+    # 下单令牌大闸总开关（false = 闸门直通，防超卖不受影响）
+    enabled: true
+    # 初始发放量 = 座位数 × 站对数 × 该系数
+    multiplier: 1.2
+    # 补偿任务单次加量
+    topup-step: 300
+
+logging:
+  level:
+    com.weiyi.business: info

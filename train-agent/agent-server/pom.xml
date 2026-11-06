@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.weiyi</groupId>
+        <artifactId>train-agent</artifactId>
+        <version>0.0.1-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>agent-server</artifactId>
+    <name>agent-server</name>
+    <description>智能问询服务</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.weiyi</groupId>
+            <artifactId>agent-api</artifactId>
+        </dependency>
+
+        <!-- 复用主仓公共模块（common-agent 已删除，公共能力统一在 train-common） -->
+        <dependency>
+            <groupId>com.weiyi</groupId>
+            <artifactId>common-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.weiyi</groupId>
+            <artifactId>common-mybatis</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.weiyi</groupId>
+            <artifactId>common-redis</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.weiyi</groupId>
+            <artifactId>common-web</artifactId>
+        </dependency>
+        <!-- 用户侧身份：LoginContextInterceptor 还原网关注入的 X-User-*，USER 维度限流取真实 userId -->
+        <dependency>
+            <groupId>com.weiyi</groupId>
+            <artifactId>common-security</artifactId>
+        </dependency>
+        <!-- 会话标题异步生成（方案 C）：MqSender / TraceIdMqListener -->
+        <dependency>
+            <groupId>com.weiyi</groupId>
+            <artifactId>common-mq</artifactId>
+            <exclusions>
+                <!-- rocketmq 链传递 okhttp-jvm 5.x（runtime），与 spring-ai 官方 SDK 的 okhttp 4.12
+                     双版本共存（5.x 换了坐标名，依赖调解不拦截），5.x 连接代码调旧 okio 缺失的方法即
+                     NoSuchMethodError。本项目未启用 OTLP 导出，排掉该 sender 只留 okhttp 4.12 + okio 3.6 -->
+                <exclusion>
+                    <groupId>io.opentelemetry</groupId>
+                    <artifactId>opentelemetry-exporter-sender-okhttp</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
+        <!-- AI 工具层下游契约：查票直连 business；乘车人/订单走 member 用户侧编排 -->
+        <dependency>
+            <groupId>com.weiyi</groupId>
+            <artifactId>business-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.weiyi</groupId>
+            <artifactId>member-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-openfeign</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-loadbalancer</artifactId>
+        </dependency>
+
+        <!-- Boot 4 模块化 starter -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webmvc</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+
+        <!-- Nacos 注册与配置（SCA 2025.1.x，配对 Boot 4.0.x） -->
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-alibaba-nacos-config</artifactId>
+        </dependency>
+
+        <!-- 存储 -->
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.baomidou</groupId>
+            <artifactId>mybatis-plus-spring-boot4-starter</artifactId>
+        </dependency>
+
+        <!-- Spring AI 2.0：库工件（D4 不用 starter 自动装配，客户端由 ModelClientFactory 动态构造） -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-client-chat</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-openai</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-anthropic</artifactId>
+        </dependency>
+        <!-- pgvector 向量存储（自动装配已在 application.yml 排除，按需手动构造） -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-vector-store-pgvector</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <scope>provided</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>
