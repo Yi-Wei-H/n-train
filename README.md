@@ -45,6 +45,37 @@
 - **聊天失败可收尾**：业务失败以固定文案作为本轮回复落库并返回 SSE error；用量/落库等收尾任一步异常都释放主回复占用，不会把用户卡在“思考中”。
 - **记忆异步链路**：整轮消息与任务 Outbox 同事务提交，Relay 投递、Consumer 提炼；消费状态机支持 PENDING/SENT 双状态消费，避免“先发消息、后回写状态”的竞态丢任务。
 
+## 功能截图
+
+**用户端（H5）**
+
+<p>
+  <img src="doc/images/h5-ai-chat.png" width="49%" alt="AI 交流">
+  <img src="doc/images/h5-my-tickets.png" width="49%" alt="我的车票">
+</p>
+<p>
+  <img src="doc/images/h5-home-dark.png" width="49%" alt="深色首页">
+  <img src="doc/images/h5-payment.png" width="49%" alt="支付页面">
+</p>
+
+**管理端**
+
+**日志**
+
+![管理端日志](doc/images/admin-logs.png)
+
+**模型配置**
+
+![管理端模型配置](doc/images/admin-model-config.png)
+
+**首页**
+
+![管理端首页](doc/images/admin-home.png)
+
+**余票查询**
+
+![管理端余票查询](doc/images/admin-ticket-query.png)
+
 ## 技术栈
 
 | 层             | 选型 |
