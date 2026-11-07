@@ -160,4 +160,4 @@ ntrain
 
 ## 开源协议
 
-本项目基于 [MIT License](LICENSE) 开源，可自由使用、修改、分发，保留版权声明即可。
+本项目基于 [Apache License 2.0](LICENSE) 开源，可自由使用、修改、分发，保留版权与许可声明即可。
