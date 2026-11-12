@@ -1,7 +1,9 @@
 package com.weiyi.agent.server.ai.tool;
 
+import com.weiyi.agent.server.constant.AgentConstants;
 import com.weiyi.agent.server.entity.AOperation;
-import com.weiyi.agent.server.ai.tool.OperationService;
+import com.weiyi.agent.server.req.AMessageReq;
+import com.weiyi.agent.server.service.conversation.AMessageService;
 import com.weiyi.business.api.api.TicketQueryApi;
 import com.weiyi.business.api.dto.TicketDTO;
 import com.weiyi.common.core.exception.BusinessException;
@@ -43,6 +45,47 @@ public class ExecuteService {
     private final OrderBizApi orderBizApi;
     private final OperationService operationService;
     private final WorkMemoryStore memoryStore;
+    private final AMessageService messageService;
+
+    /**
+     * 确认链路统一入口（前端确认卡片按钮 → ChatController）：只收意图，操作 ID 不出服务端，
+     * 按 userId+conversationId 反查唯一活跃 PENDING——CONFIRM 按操作类型路由到购票/退票执行，
+     * CANCEL 仅作废预检单不触发任何业务写。结果文本由系统构建（不经过模型），
+     * 随响应返回前端展示，并以 assistant 消息回填会话，保证对话历史与实际动作一致。
+     */
+    public ToolResult confirm(Long conversationId, Long userId, boolean confirm) {
+        AOperation operation = operationService.loadPendingByConversation(userId, conversationId);
+        if (operation == null) {
+            return ToolResult.fail(ToolResult.CODE_STATE_INVALID, "确认已失效或已被处理，请重新发起");
+        }
+        ToolResult result;
+        if (!confirm) {
+            operationService.cancel(operation.getId(), "USER_CANCELLED");
+            clearPendingMirror(conversationId);
+            result = ToolResult.ok(null, "已取消预订单。");
+        } else if (operation.getType() == AgentConstants.OPERATION_TYPE_BUY) {
+            result = executeBuy(operation.getId());
+        } else if (operation.getType() == AgentConstants.OPERATION_TYPE_REFUND) {
+            result = executeRefund(operation.getId());
+        } else {
+            return ToolResult.fail(ToolResult.CODE_STATE_INVALID, "未知的操作类型");
+        }
+        recordAssistantMessage(conversationId, result.getDisplayMessage());
+        return result;
+    }
+
+    /** 结果回填：系统构建的 assistant 轮（无用户输入、不经模型），回填失败不阻断确认结果返回 */
+    private void recordAssistantMessage(Long conversationId, String reply) {
+        try {
+            AMessageReq req = new AMessageReq();
+            req.setConversationId(conversationId);
+            req.setRole(AgentConstants.MESSAGE_ROLE_ASSISTANT);
+            req.setReply(reply);
+            messageService.create(req);
+        } catch (Exception e) {
+            log.error("确认结果消息回填失败：conversationId={}", conversationId, e);
+        }
+    }
 
     /** 购票执行：仅供确认链路调用 */
     public ToolResult executeBuy(Long operationId) {
@@ -190,6 +233,11 @@ public class ExecuteService {
     /** 成功收尾：落业务单号、清待确认镜像、分支子状态复位 */
     private void finish(Long conversationId, Long operationId, String bizNo) {
         operationService.markSuccess(operationId, bizNo);
+        clearPendingMirror(conversationId);
+    }
+
+    /** 清待确认镜像与分支子状态（确认执行成功与用户取消共用） */
+    private void clearPendingMirror(Long conversationId) {
         memoryStore.setPendingConfirm(conversationId, null);
         memoryStore.updateAgentSub(conversationId, null);
     }

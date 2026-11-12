@@ -1,12 +1,14 @@
 package com.weiyi.agent.server.service.conversation;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.weiyi.agent.server.ai.tool.WorkMemory;
 import com.weiyi.agent.server.ai.tool.WorkMemoryStore;
 import com.weiyi.agent.server.config.AgentProperties;
 import com.weiyi.agent.server.constant.AgentConstants;
 import com.weiyi.agent.api.dto.AMessageDTO;
 import com.weiyi.agent.server.dto.ChatCurrentVO;
 import com.weiyi.agent.server.dto.ChatHistoryVO;
+import com.weiyi.agent.server.dto.PendingConfirmVO;
 import com.weiyi.agent.server.entity.AAiRequest;
 import com.weiyi.agent.server.entity.AConversation;
 import com.weiyi.agent.server.entity.AMessage;
@@ -202,7 +204,21 @@ public class AccountConversationService {
         vo.setChatModelId(conversation.getChatModelId());
         vo.setActiveRequest(state.getActiveRequestId() != null && !busyExpired(state));
         fillHistory(vo, conversation.getId());
+        fillPendingConfirm(vo, conversation.getId());
         return vo;
+    }
+
+    /** 待确认卡片：工作记忆镜像存在则组装（只含展示字段，操作 id 不出服务端）；过期判定在确认接口权威执行 */
+    private void fillPendingConfirm(ChatCurrentVO vo, Long conversationId) {
+        WorkMemory.PendingConfirm pending = workMemoryStore.getMemory(conversationId).getPendingConfirm();
+        if (pending == null) {
+            return;
+        }
+        PendingConfirmVO card = new PendingConfirmVO();
+        card.setType(pending.getType());
+        card.setSummary(pending.getSummary());
+        card.setExpiresAt(pending.getExpiresAt());
+        vo.setPendingConfirm(card);
     }
 
     /**

@@ -33,6 +33,7 @@ import com.weiyi.agent.server.ai.tool.WorkState;
 import com.weiyi.agent.server.config.AgentProperties;
 import com.weiyi.agent.server.constant.AgentConstants;
 import com.weiyi.agent.server.dto.ChatVO;
+import com.weiyi.agent.server.dto.PendingConfirmVO;
 import com.weiyi.agent.server.entity.AConversation;
 import com.weiyi.agent.server.entity.AMessage;
 import com.weiyi.agent.server.entity.AModel;
@@ -497,9 +498,27 @@ public class ChatService {
         if (clientGone.get()) {
             return;
         }
+        sendConfirmationQuietly(emitter, conversationId);
         sendQuietly(emitter, SseEmitter.event().name("done").data(
                 doneVO(conversationId, messageId), MediaType.APPLICATION_JSON));
         completeQuietly(emitter);
+    }
+
+    /**
+     * 预检轮收尾推送确认卡片：工作记忆镜像存在待确认单时下发 confirmation 事件，
+     * 载荷只含展示字段（type/summary/expiresAt），操作 id 不出服务端；
+     * 前端弹底部确认表单，确认动作走 /ai/order 意图接口。
+     */
+    private void sendConfirmationQuietly(SseEmitter emitter, Long conversationId) {
+        WorkMemory.PendingConfirm pending = workMemoryStore.getMemory(conversationId).getPendingConfirm();
+        if (pending == null) {
+            return;
+        }
+        PendingConfirmVO vo = new PendingConfirmVO();
+        vo.setType(pending.getType());
+        vo.setSummary(pending.getSummary());
+        vo.setExpiresAt(pending.getExpiresAt());
+        sendQuietly(emitter, SseEmitter.event().name("confirmation").data(vo, MediaType.APPLICATION_JSON));
     }
 
     /**

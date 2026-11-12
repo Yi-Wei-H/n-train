@@ -7,6 +7,12 @@ import java.util.Map;
  */
 public final class ToolConstants {
 
+    /** 确认预支付订单 */
+    public static final String CHAT_ORDER_CONFIRM = "CONFIRM";
+
+    /** 取消预支付订单 */
+    public static final String CHAT_ORDER_CANCEL = "CANCEL";
+
     /** 引用种类：车票查询列表（listToken） */
     public static final String REF_KIND_LIST = "LIST";
 

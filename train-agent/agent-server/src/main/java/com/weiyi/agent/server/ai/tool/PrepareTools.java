@@ -125,7 +125,7 @@ public class PrepareTools {
                 + "席别：" + seatTypeName + "\n"
                 + "乘车人：" + String.join("、", maskedNames) + "（共 " + count + " 人）\n"
                 + "应付总额：" + amount + " 元\n"
-                + "用户回复「确认」后才会提交订单（待支付），下单后仍需在订单页完成支付。";
+                + "请在下方确认卡片中点击「确认」才会提交订单（待支付），下单后仍需在订单页完成支付。";
 
         Map<String, Object> snapshot = new LinkedHashMap<>();
         snapshot.put("listToken", listToken);
@@ -145,8 +145,8 @@ public class PrepareTools {
                 AgentConstants.OPERATION_TYPE_BUY, summary, JacksonUtil.toJson(snapshot));
         mirror(operation, summary);
 
+        // 模型可见数据不携带 confirmId/operationId：确认动作走卡片按钮 → /ai/order，服务端按身份反查
         Map<String, Object> data = new LinkedHashMap<>();
-        data.put("confirmId", operation.getConfirmId());
         data.put("summaryVersion", operation.getSummaryVersion());
         data.put("expiresAt", operation.getExpiresAt().toString());
         data.put("type", "BUY");
@@ -217,7 +217,7 @@ public class PrepareTools {
                 + "  " + detail.getTrainCode() + "  " + detail.getRideDate() + "\n"
                 + "退票对象：" + String.join("、", maskedNames) + "（共 " + refundItems.size() + " 张）\n"
                 + (amountKnown ? "应退金额：" + refundAmount + " 元\n" : "应退金额以实际退款为准\n")
-                + "退票不可逆，用户回复「确认」后才会提交退款申请，款项将退回钱包。";
+                + "退票不可逆，请在下方确认卡片中点击「确认」才会提交退款申请，款项将退回钱包。";
 
         Map<String, Object> snapshot = new LinkedHashMap<>();
         snapshot.put("orderId", orderId);
@@ -232,7 +232,6 @@ public class PrepareTools {
         mirror(operation, summary);
 
         Map<String, Object> data = new LinkedHashMap<>();
-        data.put("confirmId", operation.getConfirmId());
         data.put("summaryVersion", operation.getSummaryVersion());
         data.put("expiresAt", operation.getExpiresAt().toString());
         data.put("type", "REFUND");

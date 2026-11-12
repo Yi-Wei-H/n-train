@@ -27,14 +27,7 @@
             <div class="bubble user-bubble">{{ item.text }}</div>
           </div>
           <div v-else class="row-ai" :style="{ marginTop: item.gap + 'px' }">
-            <div v-if="item.type === 'confirm'" class="confirm-card">
-              <div class="confirm-summary">{{ item.summary }}</div>
-              <div class="confirm-actions">
-                <button type="button" class="btn sm neutral" disabled>确认</button>
-                <button type="button" class="btn sm quiet" disabled>取消</button>
-              </div>
-            </div>
-            <div v-else class="bubble ai-bubble">
+            <div class="bubble ai-bubble">
               <span v-if="item.round.streaming && !item.round.reply" class="thinking">思考中<span class="dots"><i /><i /><i /></span></span>
               <span v-else-if="item.round.errorText" class="muted">{{ item.round.errorText }}</span>
               <span v-else-if="item.round.failed" class="muted">（本轮回复失败）</span>
@@ -94,6 +87,21 @@
           <p v-for="(line, i) in NOTICE_LINES" :key="i" class="notice-line">{{ line }}</p>
         </div>
         <button type="button" class="btn neutral touch block" @click="noticeShow = false">知道了</button>
+      </div>
+    </van-popup>
+
+    <!-- 预订单确认：底部弹层。载荷只含展示字段，确认/取消只发意图，
+         操作由服务端按会话反查执行，结果文本以 AI 回复气泡回填 -->
+    <van-popup :show="!!pending" position="bottom" round @update:show="(v) => { if (!v && !confirming) pending = null }">
+      <div class="sheet">
+        <div class="sheet-grab" />
+        <div class="sheet-title">{{ pending?.type === 2 ? '退票确认' : '购票确认' }}</div>
+        <div class="sheet-options confirm-body">{{ pending?.summary }}</div>
+        <p v-if="pending?.expiresAt" class="confirm-expire">请在 {{ expireText }} 前确认，逾期自动作废</p>
+        <div class="sheet-actions">
+          <button type="button" class="btn quiet" :disabled="confirming" @click="act(false)">取消</button>
+          <button type="button" class="btn neutral" :disabled="confirming" @click="act(true)">确认</button>
+        </div>
       </div>
     </van-popup>
   </div>
@@ -181,6 +189,9 @@ const disabled = ref(false)
 const disabledReason = ref('')
 const messages = ref([])
 const noticeShow = ref(false)
+// 预订单确认卡片（type/summary/expiresAt，由 SSE confirmation 事件或 current 恢复）
+const pending = ref(null)
+const confirming = ref(false)
 const listEl = ref(null)
 const inputEl = ref(null)
 // 列表是否跟随底部（用户在底部附近为 true；上翻看历史时置 false，不打扰）
@@ -194,6 +205,12 @@ let titlePollTimer = null
 let seq = 0
 
 const canSend = computed(() => draft.value.trim().length > 0)
+
+// 确认截止时间：可解析则本地化展示，否则原样显示
+const expireText = computed(() => {
+  const d = new Date(pending.value?.expiresAt)
+  return isNaN(d.getTime()) ? pending.value?.expiresAt : d.toLocaleString('zh-CN', { hour12: false })
+})
 
 // 输入上限：超出 200 字仅在输入框上方红字提示，不截断输入
 const INPUT_MAX = 200
@@ -212,8 +229,6 @@ const bubbles = computed(() => {
     if (msg.kind === 'divider') {
       list.push({ key: msg.key, type: 'divider' })
       prevSide = null
-    } else if (msg.kind === 'confirm') {
-      push({ key: msg.key, type: 'confirm', summary: msg.summary }, 'ai')
     } else if (msg.kind === 'welcome') {
       push({ key: msg.key, type: 'ai', round: { reply: WELCOME_TEXT } }, 'ai')
     } else {
@@ -296,6 +311,8 @@ function applyCurrent(data) {
   disabled.value = !!data?.disabled
   disabledReason.value = data?.disabledReason || ''
   conversationId.value = data?.conversationId ?? null
+  // 刷新/多设备恢复：镜像仍存在待确认单则恢复底部确认弹层
+  pending.value = data?.pendingConfirm || null
   // 翻篇态顶栏只显示占位：顶栏对应当前（或待创建）会话，不回显旧会话标题
   title.value = data?.conversationId && !data?.archived ? data?.title || TITLE_PLACEHOLDER : TITLE_PLACEHOLDER
   const list = []
@@ -461,10 +478,37 @@ function onDoneEvent(round, done) {
   scrollFollow()
 }
 
-// 购票/退票确认卡片：本期仅预留渲染位，不实现确认交互
+// 购票/退票确认卡片：预检轮结束由服务端推送，底部弹层展示；载荷只含展示字段，不含操作 id
 function onConfirmationEvent(c) {
-  messages.value.push({ kind: 'confirm', key: 'c' + seq++, confirmId: c?.confirmId, summary: c?.summary || '' })
-  scrollFollow()
+  if (c?.summary) {
+    pending.value = { type: c.type, summary: c.summary, expiresAt: c.expiresAt }
+  }
+}
+
+// 确认/取消：只发意图与会话 id，操作由服务端按身份反查执行；结果文本以 AI 回复气泡回填会话
+async function act(confirm) {
+  if (confirming.value || !conversationId.value) {
+    return
+  }
+  confirming.value = true
+  try {
+    const message = await agentApi.post('/ai/order', {
+      conversationId: conversationId.value,
+      action: confirm ? 'CONFIRM' : 'CANCEL'
+    })
+    pending.value = null
+    if (message) {
+      messages.value.push(reactive({
+        kind: 'round', key: 'r' + seq++, userContent: '', cardId: null,
+        reply: String(message), streaming: false
+      }))
+      scrollToBottomForced()
+    }
+  } catch (e) {
+    // 请求层已统一 toast；失败保留弹层供重试
+  } finally {
+    confirming.value = false
+  }
 }
 
 function startTitlePolling() {
@@ -809,16 +853,8 @@ function uuid() {
   color: var(--text-3);
 }
 
-/* 确认卡片气泡（渲染位预留） */
-.confirm-card {
-  max-width: 78%;
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-panel);
-  background: var(--bg-card);
-}
-
-.confirm-summary {
+/* 确认弹层正文与截止提示 */
+.confirm-body {
   font-size: 14px;
   line-height: 22px;
   color: var(--text-1);
@@ -826,11 +862,11 @@ function uuid() {
   word-break: break-word;
 }
 
-.confirm-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
+.confirm-expire {
   margin-top: 10px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--text-3);
 }
 
 /* 卡片行 + 输入区 */

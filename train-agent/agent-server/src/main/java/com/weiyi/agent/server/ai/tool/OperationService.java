@@ -103,10 +103,29 @@ public class OperationService {
         if (operation == null || operation.getStatus() != AgentConstants.OPERATION_STATUS_PENDING) {
             return null;
         }
+        return ensureNotExpired(operation);
+    }
+
+    /**
+     * 按身份反查会话内唯一活跃待确认单（确认入口用）：前端按钮只传意图，
+     * 操作 ID 不出服务端；createPending 已保证同会话同类型至多一个 PENDING，倒序取最新兜底。
+     */
+    public AOperation loadPendingByConversation(Long userId, Long conversationId) {
+        AOperation operation = operationMapper.selectOne(Wrappers.<AOperation>lambdaQuery()
+                .eq(AOperation::getUserId, userId)
+                .eq(AOperation::getConversationId, conversationId)
+                .eq(AOperation::getStatus, AgentConstants.OPERATION_STATUS_PENDING)
+                .orderByDesc(AOperation::getId)
+                .last("LIMIT 1"));
+        return operation == null ? null : ensureNotExpired(operation);
+    }
+
+    /** 过期顺手置 EXPIRED 并视为不可确认 */
+    private AOperation ensureNotExpired(AOperation operation) {
         if (operation.getExpiresAt() != null && operation.getExpiresAt().isBefore(LocalDateTime.now())) {
             operationMapper.update(null, Wrappers.<AOperation>lambdaUpdate()
                     .set(AOperation::getStatus, AgentConstants.OPERATION_STATUS_EXPIRED)
-                    .eq(AOperation::getId, operationId)
+                    .eq(AOperation::getId, operation.getId())
                     .eq(AOperation::getStatus, AgentConstants.OPERATION_STATUS_PENDING));
             return null;
         }

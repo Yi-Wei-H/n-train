@@ -43,4 +43,7 @@ public class ChatCurrentVO {
 
     /** 是否还有更早的轮次（前端上滑翻页） */
     private Boolean hasMore;
+
+    /** 待确认预检单卡片（预检通过且未被确认/取消/覆盖时非空；刷新/多设备恢复弹层用） */
+    private PendingConfirmVO pendingConfirm;
 }
