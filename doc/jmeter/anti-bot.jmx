@@ -1,0 +1,999 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jmeterTestPlan version="1.2" properties="5.0" jmeter="5.6.3">
+  <hashTree>
+    <TestPlan guiclass="TestPlanGui" testclass="TestPlan" testname="防刷票四层防护验证" enabled="true">
+      <stringProp name="TestPlan.comments">模拟机器刷票流量，逐层验证：L1 网关JWT(401/40100) - L2 三维度限流(42900) - L3 图形验证码(41005) - L4 令牌大闸(43008)。设计为零订单副作用。配套说明见 doc/jmeter/anti-bot.md</stringProp>
+      <boolProp name="TestPlan.functional_mode">false</boolProp>
+      <boolProp name="TestPlan.tearDown_on_shutdown">true</boolProp>
+      <boolProp name="TestPlan.serialize_threadgroups">true</boolProp>
+      <elementProp name="TestPlan.user_defined_variables" elementType="Arguments" guiclass="ArgumentsPanel" testclass="Arguments" enabled="true">
+        <collectionProp name="Arguments.arguments">
+          <elementProp name="HOST" elementType="Argument">
+            <stringProp name="Argument.name">HOST</stringProp>
+            <stringProp name="Argument.value">${__P(host,localhost)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="GPORT" elementType="Argument">
+            <stringProp name="Argument.name">GPORT</stringProp>
+            <stringProp name="Argument.value">${__P(gport,8000)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="MPORT" elementType="Argument">
+            <stringProp name="Argument.name">MPORT</stringProp>
+            <stringProp name="Argument.value">${__P(mport,8001)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="RIDE_DATE" elementType="Argument">
+            <stringProp name="Argument.name">RIDE_DATE</stringProp>
+            <stringProp name="Argument.value">${__P(rideDate,2026-09-30)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="TRAIN_CODE" elementType="Argument">
+            <stringProp name="Argument.name">TRAIN_CODE</stringProp>
+            <stringProp name="Argument.value">${__P(train,D901)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="FROM_ST" elementType="Argument">
+            <stringProp name="Argument.name">FROM_ST</stringProp>
+            <stringProp name="Argument.value">${__P(from,AOP)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="TO_ST" elementType="Argument">
+            <stringProp name="Argument.name">TO_ST</stringProp>
+            <stringProp name="Argument.value">${__P(to,CSQ)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="SEAT_TYPE" elementType="Argument">
+            <stringProp name="Argument.name">SEAT_TYPE</stringProp>
+            <stringProp name="Argument.value">${__P(seat,5)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="FAKE_USER" elementType="Argument">
+            <stringProp name="Argument.name">FAKE_USER</stringProp>
+            <stringProp name="Argument.value">990001</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="FAKE_IP" elementType="Argument">
+            <stringProp name="Argument.name">FAKE_IP</stringProp>
+            <stringProp name="Argument.value">10.99.1.7</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="FAKE_DEVICE" elementType="Argument">
+            <stringProp name="Argument.name">FAKE_DEVICE</stringProp>
+            <stringProp name="Argument.value">perf-device-001</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+        </collectionProp>
+      </elementProp>
+    </TestPlan>
+    <hashTree>
+      <SetupThreadGroup guiclass="SetupThreadGroupGui" testclass="SetupThreadGroup" testname="S0-准备-读账号与连通检查" enabled="true">
+        <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" enabled="true">
+          <boolProp name="LoopController.continue_forever">false</boolProp>
+          <stringProp name="LoopController.loops">1</stringProp>
+        </elementProp>
+        <stringProp name="ThreadGroup.num_threads">1</stringProp>
+        <stringProp name="ThreadGroup.ramp_time">1</stringProp>
+        <boolProp name="ThreadGroup.scheduler">false</boolProp>
+        <stringProp name="ThreadGroup.duration"></stringProp>
+        <stringProp name="ThreadGroup.delay"></stringProp>
+      </SetupThreadGroup>
+      <hashTree>
+        <JSR223Sampler guiclass="TestBeanGUI" testclass="JSR223Sampler" testname="S0-读取账号CSV到props" enabled="true">
+          <stringProp name="scriptLanguage">groovy</stringProp>
+          <stringProp name="parameters"></stringProp>
+          <stringProp name="filename"></stringProp>
+          <stringProp name="cacheKey">true</stringProp>
+          <stringProp name="script">def f = new File("doc/jmeter/anti-bot-users.csv")
+if (!f.exists()) {
+  throw new RuntimeException("未找到 doc/jmeter/anti-bot-users.csv，请按 doc/jmeter/anti-bot.md 准备账号文件")
+}
+def rows = f.readLines().findAll { it.trim() &amp;&amp; !it.trim().startsWith("token,") }
+if (rows.size() == 0) {
+  throw new RuntimeException("anti-bot-users.csv 没有有效账号行")
+}
+rows.eachWithIndex { line, i ->
+  def p = line.split(",").collect { it.trim() }
+  props.put("AB_TOKEN_" + (i + 1), p[0])
+  props.put("AB_PAX_" + (i + 1), p.size() > 1 ? p[1] : "1")
+  log.info("AB账号#" + (i + 1) + " token=" + p[0].take(16) + "... pax=" + (p.size() > 1 ? p[1] : "-"))
+}
+props.put("AB_USER_COUNT", String.valueOf(rows.size()))
+if (rows.size() &lt; 2) {
+  props.put("AB_TOKEN_2", props.get("AB_TOKEN_1"))
+  props.put("AB_PAX_2", props.get("AB_PAX_1"))
+  log.warn("CSV 只有 1 个账号：S4 将复用账号A，若返回 41005(验证码标记残留)属预期外，建议补第 2 行账号")
+}
+log.info("账号加载完成，共 " + rows.size() + " 个")</stringProp>
+        </JSR223Sampler>
+        <hashTree/>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="S0-网关连通检查(白名单余票查询)" enabled="true">
+          <boolProp name="HTTPSampler.postBodyRaw">false</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments"/>
+          </elementProp>
+          <stringProp name="HTTPSampler.domain">${HOST}</stringProp>
+          <stringProp name="HTTPSampler.port">${GPORT}</stringProp>
+          <stringProp name="HTTPSampler.protocol">http</stringProp>
+          <stringProp name="HTTPSampler.path">/api/member/ticket/query?rideDate=${RIDE_DATE}&amp;fromStation=${FROM_ST}&amp;toStation=${TO_ST}</stringProp>
+          <stringProp name="HTTPSampler.method">GET</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <stringProp name="HTTPSampler.contentEncoding">UTF-8</stringProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <JSR223Assertion guiclass="TestBeanGUI" testclass="JSR223Assertion" testname="断言-网关可达且返回code=0" enabled="true">
+            <stringProp name="scriptLanguage">groovy</stringProp>
+            <stringProp name="parameters"></stringProp>
+            <stringProp name="filename"></stringProp>
+            <stringProp name="cacheKey">true</stringProp>
+            <stringProp name="script">def r = new groovy.json.JsonSlurper().parseText(prev.getResponseDataAsString())
+if (r.code != 0) {
+  AssertionResult.setFailure(true)
+  AssertionResult.setFailureMessage("网关连通检查失败 code=" + r.code + " " + r.message + "，请确认 gateway(8000)/member 已启动，或用 -Jhost 指定正确地址")
+}</stringProp>
+          </JSR223Assertion>
+          <hashTree/>
+        </hashTree>
+      </hashTree>
+      <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="S1-第一层JWT-无效凭证直接拒绝" enabled="true">
+        <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" enabled="true">
+          <boolProp name="LoopController.continue_forever">false</boolProp>
+          <stringProp name="LoopController.loops">1</stringProp>
+        </elementProp>
+        <stringProp name="ThreadGroup.num_threads">1</stringProp>
+        <stringProp name="ThreadGroup.ramp_time">1</stringProp>
+        <boolProp name="ThreadGroup.scheduler">false</boolProp>
+        <stringProp name="ThreadGroup.duration"></stringProp>
+        <stringProp name="ThreadGroup.delay"></stringProp>
+      </ThreadGroup>
+      <hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="S1A1-裸请求无token" enabled="true">
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="Argument">
+                <stringProp name="Argument.value">{"rideDate":"${RIDE_DATE}","trainCode":"${TRAIN_CODE}","fromStation":"${FROM_ST}","toStation":"${TO_ST}","seatType":${SEAT_TYPE},"passengerIds":[1]}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+          <stringProp name="HTTPSampler.domain">${HOST}</stringProp>
+          <stringProp name="HTTPSampler.port">${GPORT}</stringProp>
+          <stringProp name="HTTPSampler.protocol">http</stringProp>
+          <stringProp name="HTTPSampler.path">/api/member/order/create</stringProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <stringProp name="HTTPSampler.contentEncoding">UTF-8</stringProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="头-仅ContentType(模拟无token裸脚本)" enabled="true">
+            <collectionProp name="HeaderManager.headers">
+              <elementProp name="" elementType="Header">
+                <stringProp name="Header.name">Content-Type</stringProp>
+                <stringProp name="Header.value">application/json</stringProp>
+              </elementProp>
+            </collectionProp>
+          </HeaderManager>
+          <hashTree/>
+          <JSR223Assertion guiclass="TestBeanGUI" testclass="JSR223Assertion" testname="断言-401+40100" enabled="true">
+            <stringProp name="scriptLanguage">groovy</stringProp>
+            <stringProp name="parameters"></stringProp>
+            <stringProp name="filename"></stringProp>
+            <stringProp name="cacheKey">true</stringProp>
+            <stringProp name="script">def code = new groovy.json.JsonSlurper().parseText(prev.getResponseDataAsString()).code
+if ("401".equals(prev.getResponseCode()) &amp;&amp; code == 40100) {
+  prev.setSuccessful(true)
+} else {
+  AssertionResult.setFailure(true)
+  AssertionResult.setFailureMessage("预期 HTTP 401 + code=40100，实际 " + prev.getResponseCode() + " + " + code + " —— 第一层 JWT 未拦截")
+}</stringProp>
+          </JSR223Assertion>
+          <hashTree/>
+        </hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="S1A2-伪造乱码token" enabled="true">
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="Argument">
+                <stringProp name="Argument.value">{"rideDate":"${RIDE_DATE}","trainCode":"${TRAIN_CODE}","fromStation":"${FROM_ST}","toStation":"${TO_ST}","seatType":${SEAT_TYPE},"passengerIds":[1]}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+          <stringProp name="HTTPSampler.domain">${HOST}</stringProp>
+          <stringProp name="HTTPSampler.port">${GPORT}</stringProp>
+          <stringProp name="HTTPSampler.protocol">http</stringProp>
+          <stringProp name="HTTPSampler.path">/api/member/order/create</stringProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <stringProp name="HTTPSampler.contentEncoding">UTF-8</stringProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="头-伪造Authorization" enabled="true">
+            <collectionProp name="HeaderManager.headers">
+              <elementProp name="" elementType="Header">
+                <stringProp name="Header.name">Content-Type</stringProp>
+                <stringProp name="Header.value">application/json</stringProp>
+              </elementProp>
+              <elementProp name="" elementType="Header">
+                <stringProp name="Header.name">Authorization</stringProp>
+                <stringProp name="Header.value">Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.Zm9yZ2VkLXNpZ25hdHVyZS1ub3QtdmFsaWQ</stringProp>
+              </elementProp>
+            </collectionProp>
+          </HeaderManager>
+          <hashTree/>
+          <JSR223Assertion guiclass="TestBeanGUI" testclass="JSR223Assertion" testname="断言-401+40100" enabled="true">
+            <stringProp name="scriptLanguage">groovy</stringProp>
+            <stringProp name="parameters"></stringProp>
+            <stringProp name="filename"></stringProp>
+            <stringProp name="cacheKey">true</stringProp>
+            <stringProp name="script">def code = new groovy.json.JsonSlurper().parseText(prev.getResponseDataAsString()).code
+if ("401".equals(prev.getResponseCode()) &amp;&amp; code == 40100) {
+  prev.setSuccessful(true)
+} else {
+  AssertionResult.setFailure(true)
+  AssertionResult.setFailureMessage("预期 HTTP 401 + code=40100，实际 " + prev.getResponseCode() + " + " + code + " —— 第一层 JWT 未拦截")
+}</stringProp>
+          </JSR223Assertion>
+          <hashTree/>
+        </hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="S1A3-篡改payload不换签名" enabled="true">
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="Argument">
+                <stringProp name="Argument.value">{"rideDate":"${RIDE_DATE}","trainCode":"${TRAIN_CODE}","fromStation":"${FROM_ST}","toStation":"${TO_ST}","seatType":${SEAT_TYPE},"passengerIds":[1]}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+          <stringProp name="HTTPSampler.domain">${HOST}</stringProp>
+          <stringProp name="HTTPSampler.port">${GPORT}</stringProp>
+          <stringProp name="HTTPSampler.protocol">http</stringProp>
+          <stringProp name="HTTPSampler.path">/api/member/order/create</stringProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <stringProp name="HTTPSampler.contentEncoding">UTF-8</stringProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="头-引用篡改后的token" enabled="true">
+            <collectionProp name="HeaderManager.headers">
+              <elementProp name="" elementType="Header">
+                <stringProp name="Header.name">Content-Type</stringProp>
+                <stringProp name="Header.value">application/json</stringProp>
+              </elementProp>
+              <elementProp name="" elementType="Header">
+                <stringProp name="Header.name">Authorization</stringProp>
+                <stringProp name="Header.value">Bearer ${TAMPERED_TOKEN}</stringProp>
+              </elementProp>
+            </collectionProp>
+          </HeaderManager>
+          <hashTree/>
+          <JSR223PreProcessor guiclass="TestBeanGUI" testclass="JSR223PreProcessor" testname="前置-篡改真实token的sub声明(不换签名)" enabled="true">
+            <stringProp name="scriptLanguage">groovy</stringProp>
+            <stringProp name="parameters"></stringProp>
+            <stringProp name="filename"></stringProp>
+            <stringProp name="cacheKey">true</stringProp>
+            <stringProp name="script">def t = props.get("AB_TOKEN_1")
+def forged = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI5OTk5OTk5In0.Zm9yZ2VkLXNpZ25hdHVyZQ"
+if (t != null &amp;&amp; !t.contains("占位") &amp;&amp; t.split("\\.").length == 3) {
+  def parts = t.split("\\.")
+  def b64 = parts[1].replace('-', '+').replace('_', '/')
+  while (b64.length() % 4 != 0) { b64 = b64 + "=" }
+  def payload = new String(Base64.getDecoder().decode(b64), "UTF-8")
+  def tampered = payload.replaceFirst("\"sub\":\"[0-9]+\"", "\"sub\":\"999999999\"")
+  def nb = Base64.getUrlEncoder().withoutPadding().encodeToString(tampered.getBytes("UTF-8"))
+  forged = parts[0] + "." + nb + "." + parts[2]
+  log.info("S1A3 已把 payload 的 sub 改成 999999999，签名保持原样 —— 验签必失败")
+}
+vars.put("TAMPERED_TOKEN", forged)</stringProp>
+          </JSR223PreProcessor>
+          <hashTree/>
+          <JSR223Assertion guiclass="TestBeanGUI" testclass="JSR223Assertion" testname="断言-401+40100(防篡改)" enabled="true">
+            <stringProp name="scriptLanguage">groovy</stringProp>
+            <stringProp name="parameters"></stringProp>
+            <stringProp name="filename"></stringProp>
+            <stringProp name="cacheKey">true</stringProp>
+            <stringProp name="script">def code = new groovy.json.JsonSlurper().parseText(prev.getResponseDataAsString()).code
+if ("401".equals(prev.getResponseCode()) &amp;&amp; code == 40100) {
+  prev.setSuccessful(true)
+} else {
+  AssertionResult.setFailure(true)
+  AssertionResult.setFailureMessage("预期 HTTP 401 + code=40100，实际 " + prev.getResponseCode() + " + " + code + " —— 篡改 payload 未被验签发现，JWT 防篡改失效")
+}</stringProp>
+          </JSR223Assertion>
+          <hashTree/>
+        </hashTree>
+      </hashTree>
+      <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="S2a-第二层限流-USER维度(单账号高频)" enabled="true">
+        <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" enabled="true">
+          <boolProp name="LoopController.continue_forever">false</boolProp>
+          <stringProp name="LoopController.loops">12</stringProp>
+        </elementProp>
+        <stringProp name="ThreadGroup.num_threads">1</stringProp>
+        <stringProp name="ThreadGroup.ramp_time">1</stringProp>
+        <boolProp name="ThreadGroup.scheduler">false</boolProp>
+        <stringProp name="ThreadGroup.duration"></stringProp>
+        <stringProp name="ThreadGroup.delay"></stringProp>
+      </ThreadGroup>
+      <hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="S2a-固定userId连发12次" enabled="true">
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="Argument">
+                <stringProp name="Argument.value">{"rideDate":"${RIDE_DATE}","trainCode":"${TRAIN_CODE}","fromStation":"${FROM_ST}","toStation":"${TO_ST}","seatType":${SEAT_TYPE},"passengerIds":[1]}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+          <stringProp name="HTTPSampler.domain">${HOST}</stringProp>
+          <stringProp name="HTTPSampler.port">${MPORT}</stringProp>
+          <stringProp name="HTTPSampler.protocol">http</stringProp>
+          <stringProp name="HTTPSampler.path">/order/create</stringProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <stringProp name="HTTPSampler.contentEncoding">UTF-8</stringProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="头-固定userId+随机IP+随机设备" enabled="true">
+            <collectionProp name="HeaderManager.headers">
+              <elementProp name="" elementType="Header">
+                <stringProp name="Header.name">Content-Type</stringProp>
+                <stringProp name="Header.value">application/json</stringProp>
+              </elementProp>
+              <elementProp name="" elementType="Header">
+                <stringProp name="Header.name">X-User-Id</stringProp>
+                <stringProp name="Header.value">${FAKE_USER}</stringProp>
+              </elementProp>
+              <elementProp name="" elementType="Header">
+                <stringProp name="Header.name">X-Forwarded-For</stringProp>
+                <stringProp name="Header.value">${__groovy('10.'+(1+(int)(Math.random()*250))+'.'+(1+(int)(Math.random()*250))+'.'+(1+(int)(Math.random()*250)))}</stringProp>
+              </elementProp>
+              <elementProp name="" elementType="Header">
+                <stringProp name="Header.name">X-Device-Id</stringProp>
+                <stringProp name="Header.value">${__groovy('dev-'+UUID.randomUUID())}</stringProp>
+              </elementProp>
+            </collectionProp>
+          </HeaderManager>
+          <hashTree/>
+          <ConstantTimer guiclass="ConstantTimerGui" testclass="ConstantTimer" testname="定时器-20ms" enabled="true">
+            <stringProp name="ConstantTimer.delay">20</stringProp>
+          </ConstantTimer>
+          <hashTree/>
+          <JSR223Assertion guiclass="TestBeanGUI" testclass="JSR223Assertion" testname="断言-第4单起41005,第11单起42900(USER文案)" enabled="true">
+            <stringProp name="scriptLanguage">groovy</stringProp>
+            <stringProp name="parameters"></stringProp>
+            <stringProp name="filename"></stringProp>
+            <stringProp name="cacheKey">true</stringProp>
+            <stringProp name="script">def r = new groovy.json.JsonSlurper().parseText(prev.getResponseDataAsString())
+def it = vars.getIteration()
+if (it >= 11) {
+  if (r.code != 42900 || r.message != "下单太频繁啦，休息一下") {
+    AssertionResult.setFailure(true)
+    AssertionResult.setFailureMessage("第" + it + "次应触发 USER 维度限流(42900/下单太频繁啦，休息一下)，实际 code=" + r.code + " message=" + r.message)
+  }
+} else {
+  def expect = (it &lt;= 3) ? 41009 : 41005
+  if (r.code != expect) {
+    AssertionResult.setFailure(true)
+    AssertionResult.setFailureMessage("第" + it + "次预期 " + expect + "(假乘车人被拦/验证码标记后缺码)，实际 " + r.code + " " + r.message)
+  }
+}</stringProp>
+          </JSR223Assertion>
+          <hashTree/>
+        </hashTree>
+      </hashTree>
+      <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="S2b-第二层限流-IP维度(多账号同IP)" enabled="true">
+        <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" enabled="true">
+          <boolProp name="LoopController.continue_forever">false</boolProp>
+          <stringProp name="LoopController.loops">12</stringProp>
+        </elementProp>
+        <stringProp name="ThreadGroup.num_threads">1</stringProp>
+        <stringProp name="ThreadGroup.ramp_time">1</stringProp>
+        <boolProp name="ThreadGroup.scheduler">false</boolProp>
+        <stringProp name="ThreadGroup.duration"></stringProp>
+        <stringProp name="ThreadGroup.delay"></stringProp>
+      </ThreadGroup>
+      <hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="S2b-随机账号+固定IP连发12次" enabled="true">
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="Argument">
+                <stringProp name="Argument.value">{"rideDate":"${RIDE_DATE}","trainCode":"${TRAIN_CODE}","fromStation":"${FROM_ST}","toStation":"${TO_ST}","seatType":${SEAT_TYPE},"passengerIds":[1]}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+          <stringProp name="HTTPSampler.domain">${HOST}</stringProp>
+          <stringProp name="HTTPSampler.port">${MPORT}</stringProp>
+          <stringProp name="HTTPSampler.protocol">http</stringProp>
+          <stringProp name="HTTPSampler.path">/order/create</stringProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <stringProp name="HTTPSampler.contentEncoding">UTF-8</stringProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="头-固定IP+随机userId+随机设备" enabled="true">
+            <collectionProp name="HeaderManager.headers">
+              <elementProp name="" elementType="Header">
+                <stringProp name="Header.name">Content-Type</stringProp>
+                <stringProp name="Header.value">application/json</stringProp>
+              </elementProp>
+              <elementProp name="" elementType="Header">
+                <stringProp name="Header.name">X-User-Id</stringProp>
+                <stringProp name="Header.value">${__groovy(880000000000000000L+(long)(Math.random()*99999999999999L))}</stringProp>
+              </elementProp>
+              <elementProp name="" elementType="Header">
+                <stringProp name="Header.name">X-Forwarded-For</stringProp>
+                <stringProp name="Header.value">${FAKE_IP}</stringProp>
+              </elementProp>
+              <elementProp name="" elementType="Header">
+                <stringProp name="Header.name">X-Device-Id</stringProp>
+                <stringProp name="Header.value">${__groovy('dev-'+UUID.randomUUID())}</stringProp>
+              </elementProp>
+            </collectionProp>
+          </HeaderManager>
+          <hashTree/>
+          <ConstantTimer guiclass="ConstantTimerGui" testclass="ConstantTimer" testname="定时器-20ms" enabled="true">
+            <stringProp name="ConstantTimer.delay">20</stringProp>
+          </ConstantTimer>
+          <hashTree/>
+          <JSR223Assertion guiclass="TestBeanGUI" testclass="JSR223Assertion" testname="断言-前10次41009,第11次起42900(IP文案)" enabled="true">
+            <stringProp name="scriptLanguage">groovy</stringProp>
+            <stringProp name="parameters"></stringProp>
+            <stringProp name="filename"></stringProp>
+            <stringProp name="cacheKey">true</stringProp>
+            <stringProp name="script">def r = new groovy.json.JsonSlurper().parseText(prev.getResponseDataAsString())
+def it = vars.getIteration()
+def expect = (it &lt;= 10) ? 41009 : 42900
+if (r.code != expect) {
+  AssertionResult.setFailure(true)
+  AssertionResult.setFailureMessage("第" + it + "次预期 " + expect + "，实际 " + r.code + " " + r.message + "(IP桶唯一固定维度，第11次必来自IP限流)")
+}
+if (it >= 11 &amp;&amp; r.code == 42900 &amp;&amp; r.message != "下单太频繁啦，请稍后重试") {
+  AssertionResult.setFailure(true)
+  AssertionResult.setFailureMessage("IP/DEVICE 维度文案应为「请稍后重试」，实际 " + r.message + " —— 可能误触发 USER 维度")
+}</stringProp>
+          </JSR223Assertion>
+          <hashTree/>
+        </hashTree>
+      </hashTree>
+      <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="S2c-第二层限流-DEVICE维度(同指纹多账号)" enabled="true">
+        <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" enabled="true">
+          <boolProp name="LoopController.continue_forever">false</boolProp>
+          <stringProp name="LoopController.loops">12</stringProp>
+        </elementProp>
+        <stringProp name="ThreadGroup.num_threads">1</stringProp>
+        <stringProp name="ThreadGroup.ramp_time">1</stringProp>
+        <boolProp name="ThreadGroup.scheduler">false</boolProp>
+        <stringProp name="ThreadGroup.duration"></stringProp>
+        <stringProp name="ThreadGroup.delay"></stringProp>
+      </ThreadGroup>
+      <hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="S2c-随机账号+随机IP+固定指纹连发12次" enabled="true">
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="Argument">
+                <stringProp name="Argument.value">{"rideDate":"${RIDE_DATE}","trainCode":"${TRAIN_CODE}","fromStation":"${FROM_ST}","toStation":"${TO_ST}","seatType":${SEAT_TYPE},"passengerIds":[1]}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+          <stringProp name="HTTPSampler.domain">${HOST}</stringProp>
+          <stringProp name="HTTPSampler.port">${MPORT}</stringProp>
+          <stringProp name="HTTPSampler.protocol">http</stringProp>
+          <stringProp name="HTTPSampler.path">/order/create</stringProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <stringProp name="HTTPSampler.contentEncoding">UTF-8</stringProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="头-固定指纹+随机userId+随机IP" enabled="true">
+            <collectionProp name="HeaderManager.headers">
+              <elementProp name="" elementType="Header">
+                <stringProp name="Header.name">Content-Type</stringProp>
+                <stringProp name="Header.value">application/json</stringProp>
+              </elementProp>
+              <elementProp name="" elementType="Header">
+                <stringProp name="Header.name">X-User-Id</stringProp>
+                <stringProp name="Header.value">${__groovy(880000000000000000L+(long)(Math.random()*99999999999999L))}</stringProp>
+              </elementProp>
+              <elementProp name="" elementType="Header">
+                <stringProp name="Header.name">X-Forwarded-For</stringProp>
+                <stringProp name="Header.value">${__groovy('10.'+(1+(int)(Math.random()*250))+'.'+(1+(int)(Math.random()*250))+'.'+(1+(int)(Math.random()*250)))}</stringProp>
+              </elementProp>
+              <elementProp name="" elementType="Header">
+                <stringProp name="Header.name">X-Device-Id</stringProp>
+                <stringProp name="Header.value">${FAKE_DEVICE}</stringProp>
+              </elementProp>
+            </collectionProp>
+          </HeaderManager>
+          <hashTree/>
+          <ConstantTimer guiclass="ConstantTimerGui" testclass="ConstantTimer" testname="定时器-20ms" enabled="true">
+            <stringProp name="ConstantTimer.delay">20</stringProp>
+          </ConstantTimer>
+          <hashTree/>
+          <JSR223Assertion guiclass="TestBeanGUI" testclass="JSR223Assertion" testname="断言-前10次41009,第11次起42900(DEVICE桶)" enabled="true">
+            <stringProp name="scriptLanguage">groovy</stringProp>
+            <stringProp name="parameters"></stringProp>
+            <stringProp name="filename"></stringProp>
+            <stringProp name="cacheKey">true</stringProp>
+            <stringProp name="script">def r = new groovy.json.JsonSlurper().parseText(prev.getResponseDataAsString())
+def it = vars.getIteration()
+def expect = (it &lt;= 10) ? 41009 : 42900
+if (r.code != expect) {
+  AssertionResult.setFailure(true)
+  AssertionResult.setFailureMessage("第" + it + "次预期 " + expect + "，实际 " + r.code + " " + r.message + "(user/ip 均随机不超限，第11次必来自 DEVICE 维度)")
+}</stringProp>
+          </JSR223Assertion>
+          <hashTree/>
+        </hashTree>
+      </hashTree>
+      <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="S3-第三层验证码-高频下单强制验码" enabled="true">
+        <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" enabled="true">
+          <boolProp name="LoopController.continue_forever">false</boolProp>
+          <stringProp name="LoopController.loops">5</stringProp>
+        </elementProp>
+        <stringProp name="ThreadGroup.num_threads">1</stringProp>
+        <stringProp name="ThreadGroup.ramp_time">1</stringProp>
+        <boolProp name="ThreadGroup.scheduler">false</boolProp>
+        <stringProp name="ThreadGroup.duration"></stringProp>
+        <stringProp name="ThreadGroup.delay"></stringProp>
+      </ThreadGroup>
+      <hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="S3-真实账号A连发5单(1~3无标记,4~5缺码/错码)" enabled="true">
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="Argument">
+                <stringProp name="Argument.value">PLACEHOLDER_BODY</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+          <stringProp name="HTTPSampler.domain">${HOST}</stringProp>
+          <stringProp name="HTTPSampler.port">${GPORT}</stringProp>
+          <stringProp name="HTTPSampler.protocol">http</stringProp>
+          <stringProp name="HTTPSampler.path">/api/member/order/create</stringProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <stringProp name="HTTPSampler.contentEncoding">UTF-8</stringProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="头-账号A token+随机设备指纹" enabled="true">
+            <collectionProp name="HeaderManager.headers">
+              <elementProp name="" elementType="Header">
+                <stringProp name="Header.name">Content-Type</stringProp>
+                <stringProp name="Header.value">application/json</stringProp>
+              </elementProp>
+              <elementProp name="" elementType="Header">
+                <stringProp name="Header.name">Authorization</stringProp>
+                <stringProp name="Header.value">Bearer ${__P(AB_TOKEN_1)}</stringProp>
+              </elementProp>
+              <elementProp name="" elementType="Header">
+                <stringProp name="Header.name">X-Device-Id</stringProp>
+                <stringProp name="Header.value">${__groovy('dev-'+UUID.randomUUID())}</stringProp>
+              </elementProp>
+            </collectionProp>
+          </HeaderManager>
+          <hashTree/>
+          <JSR223PreProcessor guiclass="TestBeanGUI" testclass="JSR223PreProcessor" testname="前置-按次数动态拼body(第5次带假验证码)" enabled="true">
+            <stringProp name="scriptLanguage">groovy</stringProp>
+            <stringProp name="parameters"></stringProp>
+            <stringProp name="filename"></stringProp>
+            <stringProp name="cacheKey">true</stringProp>
+            <stringProp name="script">def it = vars.getIteration()
+def body = '{"rideDate":"' + vars.get("RIDE_DATE") + '","trainCode":"' + vars.get("TRAIN_CODE") + '","fromStation":"' + vars.get("FROM_ST") + '","toStation":"' + vars.get("TO_ST") + '","seatType":' + vars.get("SEAT_TYPE") + ',"passengerIds":[1]}'
+if (it == 5) {
+  body = body.substring(0, body.length() - 1) + ',"captchaKey":"not-exist-key","captchaCode":"ZZZZ"}'
+}
+sampler.getArguments().getArgument(0).setValue(body)</stringProp>
+          </JSR223PreProcessor>
+          <hashTree/>
+          <ConstantTimer guiclass="ConstantTimerGui" testclass="ConstantTimer" testname="定时器-100ms" enabled="true">
+            <stringProp name="ConstantTimer.delay">100</stringProp>
+          </ConstantTimer>
+          <hashTree/>
+          <JSR223Assertion guiclass="TestBeanGUI" testclass="JSR223Assertion" testname="断言-1~3次41009,4~5次41005" enabled="true">
+            <stringProp name="scriptLanguage">groovy</stringProp>
+            <stringProp name="parameters"></stringProp>
+            <stringProp name="filename"></stringProp>
+            <stringProp name="cacheKey">true</stringProp>
+            <stringProp name="script">def r = new groovy.json.JsonSlurper().parseText(prev.getResponseDataAsString())
+def it = vars.getIteration()
+def expect = (it &lt;= 3) ? 41009 : 41005
+if (r.code != expect) {
+  def hint = ""
+  if (r.code == 42900) { hint = "60s 滑窗内有其他下单污染了限流桶，等 60s 重跑" }
+  else if (r.code == 40100) { hint = "账号A token 失效，重新从浏览器取" }
+  AssertionResult.setFailure(true)
+  AssertionResult.setFailureMessage("第" + it + "次预期 " + expect + "(60s内第4单起强制验证码)，实际 " + r.code + " " + r.message + " " + hint)
+}</stringProp>
+          </JSR223Assertion>
+          <hashTree/>
+        </hashTree>
+      </hashTree>
+      <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="S4-第四层令牌大闸-令牌耗尽拒单" enabled="true">
+        <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" enabled="true">
+          <boolProp name="LoopController.continue_forever">false</boolProp>
+          <stringProp name="LoopController.loops">1</stringProp>
+        </elementProp>
+        <stringProp name="ThreadGroup.num_threads">1</stringProp>
+        <stringProp name="ThreadGroup.ramp_time">1</stringProp>
+        <boolProp name="ThreadGroup.scheduler">false</boolProp>
+        <stringProp name="ThreadGroup.duration"></stringProp>
+        <stringProp name="ThreadGroup.delay"></stringProp>
+      </ThreadGroup>
+      <hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="S4-账号B正常下单(令牌已被置0)" enabled="true">
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="Argument">
+                <stringProp name="Argument.value">{"rideDate":"${RIDE_DATE}","trainCode":"${TRAIN_CODE}","fromStation":"${FROM_ST}","toStation":"${TO_ST}","seatType":${SEAT_TYPE},"passengerIds":[${__P(AB_PAX_2)}]}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+          <stringProp name="HTTPSampler.domain">${HOST}</stringProp>
+          <stringProp name="HTTPSampler.port">${GPORT}</stringProp>
+          <stringProp name="HTTPSampler.protocol">http</stringProp>
+          <stringProp name="HTTPSampler.path">/api/member/order/create</stringProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <stringProp name="HTTPSampler.contentEncoding">UTF-8</stringProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="头-账号B token+随机设备" enabled="true">
+            <collectionProp name="HeaderManager.headers">
+              <elementProp name="" elementType="Header">
+                <stringProp name="Header.name">Content-Type</stringProp>
+                <stringProp name="Header.value">application/json</stringProp>
+              </elementProp>
+              <elementProp name="" elementType="Header">
+                <stringProp name="Header.name">Authorization</stringProp>
+                <stringProp name="Header.value">Bearer ${__P(AB_TOKEN_2)}</stringProp>
+              </elementProp>
+              <elementProp name="" elementType="Header">
+                <stringProp name="Header.name">X-Device-Id</stringProp>
+                <stringProp name="Header.value">${__groovy('dev-'+UUID.randomUUID())}</stringProp>
+              </elementProp>
+            </collectionProp>
+          </HeaderManager>
+          <hashTree/>
+          <JSR223Assertion guiclass="TestBeanGUI" testclass="JSR223Assertion" testname="断言-43008令牌大闸拦截" enabled="true">
+            <stringProp name="scriptLanguage">groovy</stringProp>
+            <stringProp name="parameters"></stringProp>
+            <stringProp name="filename"></stringProp>
+            <stringProp name="cacheKey">true</stringProp>
+            <stringProp name="script">def r = new groovy.json.JsonSlurper().parseText(prev.getResponseDataAsString())
+if (r.code != 43008) {
+  def hint = ""
+  if (r.code == 0) { hint = "真实成单! 令牌未置零或已懒重建，先执行 anti-bot.md 里的 Redis SET 0 再重跑，并取消该订单" }
+  else if (r.code == 41005) { hint = "账号B 被验证码标记(10分钟TTL)，换账号或手动清 ntrain:order:captcha:required:*" }
+  else if (r.code == 42900) { hint = "限流桶未清(60s滑窗)，稍后重跑" }
+  else if (r.code == 41009) { hint = "passengerId 不属于账号B，检查 CSV 第2行" }
+  AssertionResult.setFailure(true)
+  AssertionResult.setFailureMessage("令牌大闸未拦截：code=" + r.code + " " + r.message + "。提示：" + hint)
+}</stringProp>
+          </JSR223Assertion>
+          <hashTree/>
+        </hashTree>
+      </hashTree>
+      <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="S2d-第二层综合-多账号同IP并发刷票" enabled="true">
+        <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" enabled="true">
+          <boolProp name="LoopController.continue_forever">false</boolProp>
+          <stringProp name="LoopController.loops">12</stringProp>
+        </elementProp>
+        <stringProp name="ThreadGroup.num_threads">3</stringProp>
+        <stringProp name="ThreadGroup.ramp_time">1</stringProp>
+        <boolProp name="ThreadGroup.scheduler">false</boolProp>
+        <stringProp name="ThreadGroup.duration"></stringProp>
+        <stringProp name="ThreadGroup.delay"></stringProp>
+      </ThreadGroup>
+      <hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="S2d-3账号x12次并发(真实token,假乘车人)" enabled="true">
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="Argument">
+                <stringProp name="Argument.value">{"rideDate":"${RIDE_DATE}","trainCode":"${TRAIN_CODE}","fromStation":"${FROM_ST}","toStation":"${TO_ST}","seatType":${SEAT_TYPE},"passengerIds":[1]}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+          <stringProp name="HTTPSampler.domain">${HOST}</stringProp>
+          <stringProp name="HTTPSampler.port">${GPORT}</stringProp>
+          <stringProp name="HTTPSampler.protocol">http</stringProp>
+          <stringProp name="HTTPSampler.path">/api/member/order/create</stringProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <stringProp name="HTTPSampler.contentEncoding">UTF-8</stringProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="头-每线程绑定一个账号+随机指纹" enabled="true">
+            <collectionProp name="HeaderManager.headers">
+              <elementProp name="" elementType="Header">
+                <stringProp name="Header.name">Content-Type</stringProp>
+                <stringProp name="Header.value">application/json</stringProp>
+              </elementProp>
+              <elementProp name="" elementType="Header">
+                <stringProp name="Header.name">Authorization</stringProp>
+                <stringProp name="Header.value">Bearer ${TK}</stringProp>
+              </elementProp>
+              <elementProp name="" elementType="Header">
+                <stringProp name="Header.name">X-Device-Id</stringProp>
+                <stringProp name="Header.value">${__groovy('dev-'+UUID.randomUUID())}</stringProp>
+              </elementProp>
+            </collectionProp>
+          </HeaderManager>
+          <hashTree/>
+          <JSR223PreProcessor guiclass="TestBeanGUI" testclass="JSR223PreProcessor" testname="前置-按线程号绑定账号" enabled="true">
+            <stringProp name="scriptLanguage">groovy</stringProp>
+            <stringProp name="parameters"></stringProp>
+            <stringProp name="filename"></stringProp>
+            <stringProp name="cacheKey">true</stringProp>
+            <stringProp name="script">def n = Integer.parseInt(props.get("AB_USER_COUNT") ?: "1")
+def idx = Math.min(ctx.getThreadNum() + 1, n)
+vars.put("TK", props.get("AB_TOKEN_" + idx) ?: "no-token")
+log.info("线程" + ctx.getThreadNum() + " 绑定账号#" + idx)</stringProp>
+          </JSR223PreProcessor>
+          <hashTree/>
+          <ConstantTimer guiclass="ConstantTimerGui" testclass="ConstantTimer" testname="定时器-20ms" enabled="true">
+            <stringProp name="ConstantTimer.delay">20</stringProp>
+          </ConstantTimer>
+          <hashTree/>
+          <JSR223Assertion guiclass="TestBeanGUI" testclass="JSR223Assertion" testname="断言-全部落在拦截集合,无code=0" enabled="true">
+            <stringProp name="scriptLanguage">groovy</stringProp>
+            <stringProp name="parameters"></stringProp>
+            <stringProp name="filename"></stringProp>
+            <stringProp name="cacheKey">true</stringProp>
+            <stringProp name="script">def r = new groovy.json.JsonSlurper().parseText(prev.getResponseDataAsString())
+def allowed = [41005, 41009, 42900] as Set
+if (!allowed.contains(r.code)) {
+  AssertionResult.setFailure(true)
+  AssertionResult.setFailureMessage("多账号同IP并发：code=" + r.code + " 不在预期集合(41005验证码/41009乘车人/42900限流)，0=成单说明被穿透")
+}</stringProp>
+          </JSR223Assertion>
+          <hashTree/>
+        </hashTree>
+      </hashTree>
+      <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="S5-全链路混战(默认禁用,验证时手动开启)" enabled="false">
+        <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" enabled="true">
+          <boolProp name="LoopController.continue_forever">false</boolProp>
+          <stringProp name="LoopController.loops">20</stringProp>
+        </elementProp>
+        <stringProp name="ThreadGroup.num_threads">10</stringProp>
+        <stringProp name="ThreadGroup.ramp_time">2</stringProp>
+        <boolProp name="ThreadGroup.scheduler">false</boolProp>
+        <stringProp name="ThreadGroup.duration"></stringProp>
+        <stringProp name="ThreadGroup.delay"></stringProp>
+      </ThreadGroup>
+      <hashTree>
+        <IfController guiclass="IfControllerPanel" testclass="IfController" testname="奇数线程-无token裸脚本" enabled="true">
+          <stringProp name="IfController.condition">${__jexl3(${__threadNum} % 2 == 1)}</stringProp>
+          <boolProp name="IfController.useExpression">true</boolProp>
+          <boolProp name="IfController.evaluateAll">false</boolProp>
+        </IfController>
+        <hashTree>
+          <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="S5-裸脚本攻击(无token)" enabled="true">
+            <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+            <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+              <collectionProp name="Arguments.arguments">
+                <elementProp name="" elementType="Argument">
+                  <stringProp name="Argument.value">{"rideDate":"${RIDE_DATE}","trainCode":"${TRAIN_CODE}","fromStation":"${FROM_ST}","toStation":"${TO_ST}","seatType":${SEAT_TYPE},"passengerIds":[1]}</stringProp>
+                  <stringProp name="Argument.metadata">=</stringProp>
+                </elementProp>
+              </collectionProp>
+            </elementProp>
+            <stringProp name="HTTPSampler.domain">${HOST}</stringProp>
+            <stringProp name="HTTPSampler.port">${GPORT}</stringProp>
+            <stringProp name="HTTPSampler.protocol">http</stringProp>
+            <stringProp name="HTTPSampler.path">/api/member/order/create</stringProp>
+            <stringProp name="HTTPSampler.method">POST</stringProp>
+            <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+            <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
+            <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+            <stringProp name="HTTPSampler.contentEncoding">UTF-8</stringProp>
+          </HTTPSamplerProxy>
+          <hashTree>
+            <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="头-仅ContentType" enabled="true">
+              <collectionProp name="HeaderManager.headers">
+                <elementProp name="" elementType="Header">
+                  <stringProp name="Header.name">Content-Type</stringProp>
+                  <stringProp name="Header.value">application/json</stringProp>
+                </elementProp>
+              </collectionProp>
+            </HeaderManager>
+            <hashTree/>
+            <JSR223Assertion guiclass="TestBeanGUI" testclass="JSR223Assertion" testname="断言-应被JWT层拦截" enabled="true">
+              <stringProp name="scriptLanguage">groovy</stringProp>
+              <stringProp name="parameters"></stringProp>
+              <stringProp name="filename"></stringProp>
+              <stringProp name="cacheKey">true</stringProp>
+              <stringProp name="script">def code = new groovy.json.JsonSlurper().parseText(prev.getResponseDataAsString()).code
+if ("401".equals(prev.getResponseCode()) &amp;&amp; (code == 40100 || code == 40101)) {
+  prev.setSuccessful(true)
+} else {
+  AssertionResult.setFailure(true)
+  AssertionResult.setFailureMessage("裸脚本应被 JWT 层拦截(401/40100)，实际 " + prev.getResponseCode() + "/" + code)
+}</stringProp>
+            </JSR223Assertion>
+            <hashTree/>
+          </hashTree>
+        </hashTree>
+        <IfController guiclass="IfControllerPanel" testclass="IfController" testname="偶数线程-持token高频刷票" enabled="true">
+          <stringProp name="IfController.condition">${__jexl3(${__threadNum} % 2 == 0)}</stringProp>
+          <boolProp name="IfController.useExpression">true</boolProp>
+          <boolProp name="IfController.evaluateAll">false</boolProp>
+        </IfController>
+        <hashTree>
+          <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="S5-持token高频攻击" enabled="true">
+            <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+            <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+              <collectionProp name="Arguments.arguments">
+                <elementProp name="" elementType="Argument">
+                  <stringProp name="Argument.value">{"rideDate":"${RIDE_DATE}","trainCode":"${TRAIN_CODE}","fromStation":"${FROM_ST}","toStation":"${TO_ST}","seatType":${SEAT_TYPE},"passengerIds":[1]}</stringProp>
+                  <stringProp name="Argument.metadata">=</stringProp>
+                </elementProp>
+              </collectionProp>
+            </elementProp>
+            <stringProp name="HTTPSampler.domain">${HOST}</stringProp>
+            <stringProp name="HTTPSampler.port">${GPORT}</stringProp>
+            <stringProp name="HTTPSampler.protocol">http</stringProp>
+            <stringProp name="HTTPSampler.path">/api/member/order/create</stringProp>
+            <stringProp name="HTTPSampler.method">POST</stringProp>
+            <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+            <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
+            <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+            <stringProp name="HTTPSampler.contentEncoding">UTF-8</stringProp>
+          </HTTPSamplerProxy>
+          <hashTree>
+            <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="头-账号A token+随机指纹" enabled="true">
+              <collectionProp name="HeaderManager.headers">
+                <elementProp name="" elementType="Header">
+                  <stringProp name="Header.name">Content-Type</stringProp>
+                  <stringProp name="Header.value">application/json</stringProp>
+                </elementProp>
+                <elementProp name="" elementType="Header">
+                  <stringProp name="Header.name">Authorization</stringProp>
+                  <stringProp name="Header.value">Bearer ${__P(AB_TOKEN_1)}</stringProp>
+                </elementProp>
+                <elementProp name="" elementType="Header">
+                  <stringProp name="Header.name">X-Device-Id</stringProp>
+                  <stringProp name="Header.value">${__groovy('dev-'+UUID.randomUUID())}</stringProp>
+                </elementProp>
+              </collectionProp>
+            </HeaderManager>
+            <hashTree/>
+            <ConstantTimer guiclass="ConstantTimerGui" testclass="ConstantTimer" testname="定时器-10ms" enabled="true">
+              <stringProp name="ConstantTimer.delay">10</stringProp>
+            </ConstantTimer>
+            <hashTree/>
+            <JSR223Assertion guiclass="TestBeanGUI" testclass="JSR223Assertion" testname="断言-应落在四层拦截集合内" enabled="true">
+              <stringProp name="scriptLanguage">groovy</stringProp>
+              <stringProp name="parameters"></stringProp>
+              <stringProp name="filename"></stringProp>
+              <stringProp name="cacheKey">true</stringProp>
+              <stringProp name="script">def code = new groovy.json.JsonSlurper().parseText(prev.getResponseDataAsString()).code
+def allowed = [40100, 40101, 41005, 41009, 42900, 43008] as Set
+if (allowed.contains(code)) {
+  prev.setSuccessful(true)
+} else {
+  AssertionResult.setFailure(true)
+  AssertionResult.setFailureMessage("混战攻击 code=" + code + " 不在四层拦截集合内，0=成单说明被穿透")
+}</stringProp>
+            </JSR223Assertion>
+            <hashTree/>
+          </hashTree>
+        </hashTree>
+      </hashTree>
+      <ResultCollector guiclass="ViewResultsFullVisualizer" testclass="ResultCollector" testname="查看结果树(GUI调试用)" enabled="true">
+        <boolProp name="ResultCollector.error_logging">false</boolProp>
+        <objProp>
+          <name>saveConfig</name>
+          <value class="SampleSaveConfiguration">
+            <time>true</time>
+            <latency>true</latency>
+            <timestamp>true</timestamp>
+            <success>true</success>
+            <label>true</label>
+            <code>true</code>
+            <message>true</message>
+            <threadName>true</threadName>
+            <dataType>true</dataType>
+            <encoding>false</encoding>
+            <assertions>true</assertions>
+            <subresults>true</subresults>
+            <responseData>false</responseData>
+            <samplerData>false</samplerData>
+            <xml>false</xml>
+            <fieldNames>true</fieldNames>
+            <responseHeaders>false</responseHeaders>
+            <requestHeaders>false</requestHeaders>
+            <responseDataOnError>true</responseDataOnError>
+            <saveAssertionResultsFailureMessage>true</saveAssertionResultsFailureMessage>
+            <assertionsResultsToSave>0</assertionsResultsToSave>
+            <bytes>true</bytes>
+            <sentBytes>true</sentBytes>
+            <url>true</url>
+            <threadCounts>true</threadCounts>
+            <idleTime>true</idleTime>
+            <connectTime>true</connectTime>
+          </value>
+        </objProp>
+        <stringProp name="filename"></stringProp>
+      </ResultCollector>
+      <hashTree/>
+      <ResultCollector guiclass="SummaryReport" testclass="ResultCollector" testname="聚合报告" enabled="true">
+        <boolProp name="ResultCollector.error_logging">false</boolProp>
+        <objProp>
+          <name>saveConfig</name>
+          <value class="SampleSaveConfiguration">
+            <time>true</time>
+            <latency>true</latency>
+            <timestamp>true</timestamp>
+            <success>true</success>
+            <label>true</label>
+            <code>true</code>
+            <message>true</message>
+            <threadName>true</threadName>
+            <dataType>true</dataType>
+            <encoding>false</encoding>
+            <assertions>true</assertions>
+            <subresults>true</subresults>
+            <responseData>false</responseData>
+            <samplerData>false</samplerData>
+            <xml>false</xml>
+            <fieldNames>true</fieldNames>
+            <responseHeaders>false</responseHeaders>
+            <requestHeaders>false</requestHeaders>
+            <responseDataOnError>false</responseDataOnError>
+            <saveAssertionResultsFailureMessage>true</saveAssertionResultsFailureMessage>
+            <assertionsResultsToSave>0</assertionsResultsToSave>
+            <bytes>true</bytes>
+            <sentBytes>true</sentBytes>
+            <url>true</url>
+            <threadCounts>true</threadCounts>
+            <idleTime>true</idleTime>
+            <connectTime>true</connectTime>
+          </value>
+        </objProp>
+        <stringProp name="filename"></stringProp>
+      </ResultCollector>
+      <hashTree/>
+    </hashTree>
+  </hashTree>
+</jmeterTestPlan>
