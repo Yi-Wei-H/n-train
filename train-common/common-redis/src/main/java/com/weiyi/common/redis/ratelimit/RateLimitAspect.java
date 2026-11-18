@@ -8,12 +8,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
-import org.redisson.api.RScript;
+import org.aspectj.lang.reflect.MethodSignature;
 import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.core.io.ClassPathResource;
-import org.springframework.stereotype.Component;
 
+import java.lang.reflect.Method;
 import java.util.Collections;
 
 /**
@@ -33,16 +32,16 @@ public class RateLimitAspect {
         this.userIdProvider = userIdProvider;
     }
 
-    @Around("@annotation(rateLimit) || @annotation(rateLimits)")
-    public Object around(ProceedingJoinPoint pjp, RateLimit rateLimit, RateLimits rateLimits) throws Throwable {
-        RateLimit[] rules;
-        if (rateLimit != null) {
-            rules = new RateLimit[]{rateLimit};
-        } else if (rateLimits != null) {
-            rules = rateLimits.value();
-        } else {
-            return pjp.proceed();
-        }
+    /**
+     * 切点不做参数绑定（同一方法叠加多个 @RateLimit 时编译器会包装成 @RateLimits 容器，
+     * 带绑定的 @annotation 匹配不到容器，历史上导致限流静默失效），注解统一由
+     * getAnnotationsByType 解析——单个直接存在与容器包装两种形态都正确。
+     */
+    @Around("@annotation(com.weiyi.common.redis.ratelimit.RateLimit) || "
+            + "@annotation(com.weiyi.common.redis.ratelimit.RateLimits)")
+    public Object around(ProceedingJoinPoint pjp) throws Throwable {
+        Method method = ((MethodSignature) pjp.getSignature()).getMethod();
+        RateLimit[] rules = method.getAnnotationsByType(RateLimit.class);
         for (RateLimit rule : rules) {
             check(rule, pjp);
         }

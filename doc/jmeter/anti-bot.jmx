@@ -1,12 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <jmeterTestPlan version="1.2" properties="5.0" jmeter="5.6.3">
   <hashTree>
-    <TestPlan guiclass="TestPlanGui" testclass="TestPlan" testname="防刷票四层防护验证" enabled="true">
+    <TestPlan guiclass="TestPlanGui" testclass="TestPlan" testname="防刷票四层防护验证">
       <stringProp name="TestPlan.comments">模拟机器刷票流量，逐层验证：L1 网关JWT(401/40100) - L2 三维度限流(42900) - L3 图形验证码(41005) - L4 令牌大闸(43008)。设计为零订单副作用。配套说明见 doc/jmeter/anti-bot.md</stringProp>
-      <boolProp name="TestPlan.functional_mode">false</boolProp>
-      <boolProp name="TestPlan.tearDown_on_shutdown">true</boolProp>
       <boolProp name="TestPlan.serialize_threadgroups">true</boolProp>
-      <elementProp name="TestPlan.user_defined_variables" elementType="Arguments" guiclass="ArgumentsPanel" testclass="Arguments" enabled="true">
+      <boolProp name="TestPlan.tearDown_on_shutdown">true</boolProp>
+      <elementProp name="TestPlan.user_defined_variables" elementType="Arguments" guiclass="ArgumentsPanel" testclass="Arguments">
         <collectionProp name="Arguments.arguments">
           <elementProp name="HOST" elementType="Argument">
             <stringProp name="Argument.name">HOST</stringProp>
@@ -25,7 +24,7 @@
           </elementProp>
           <elementProp name="RIDE_DATE" elementType="Argument">
             <stringProp name="Argument.name">RIDE_DATE</stringProp>
-            <stringProp name="Argument.value">${__P(rideDate,2026-09-30)}</stringProp>
+            <stringProp name="Argument.value">${__P(rideDate,2026-11-18)}</stringProp>
             <stringProp name="Argument.metadata">=</stringProp>
           </elementProp>
           <elementProp name="TRAIN_CODE" elementType="Argument">
@@ -68,16 +67,14 @@
     </TestPlan>
     <hashTree>
       <SetupThreadGroup guiclass="SetupThreadGroupGui" testclass="SetupThreadGroup" testname="S0-准备-读账号与连通检查" enabled="true">
+        <intProp name="ThreadGroup.num_threads">1</intProp>
+        <intProp name="ThreadGroup.ramp_time">1</intProp>
+        <boolProp name="ThreadGroup.same_user_on_next_iteration">true</boolProp>
         <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
-        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" enabled="true">
-          <boolProp name="LoopController.continue_forever">false</boolProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController">
           <stringProp name="LoopController.loops">1</stringProp>
+          <boolProp name="LoopController.continue_forever">false</boolProp>
         </elementProp>
-        <stringProp name="ThreadGroup.num_threads">1</stringProp>
-        <stringProp name="ThreadGroup.ramp_time">1</stringProp>
-        <boolProp name="ThreadGroup.scheduler">false</boolProp>
-        <stringProp name="ThreadGroup.duration"></stringProp>
-        <stringProp name="ThreadGroup.delay"></stringProp>
       </SetupThreadGroup>
       <hashTree>
         <JSR223Sampler guiclass="TestBeanGUI" testclass="JSR223Sampler" testname="S0-读取账号CSV到props" enabled="true">
@@ -85,43 +82,46 @@
           <stringProp name="parameters"></stringProp>
           <stringProp name="filename"></stringProp>
           <stringProp name="cacheKey">true</stringProp>
-          <stringProp name="script">def f = new File("doc/jmeter/anti-bot-users.csv")
-if (!f.exists()) {
-  throw new RuntimeException("未找到 doc/jmeter/anti-bot-users.csv，请按 doc/jmeter/anti-bot.md 准备账号文件")
+          <stringProp name="script">def f = props.get(&quot;csv&quot;) ? new File(props.get(&quot;csv&quot;)) : null
+if (f == null) {
+  def base = org.apache.jmeter.services.FileServer.getFileServer().getBaseDir()
+  f = [new File(base, &quot;anti-bot-users.csv&quot;), new File(base, &quot;doc/jmeter/anti-bot-users.csv&quot;), new File(&quot;doc/jmeter/anti-bot-users.csv&quot;)].find { it.exists() }
 }
-def rows = f.readLines().findAll { it.trim() &amp;&amp; !it.trim().startsWith("token,") }
+if (f == null) {
+  throw new RuntimeException(&quot;未找到 anti-bot-users.csv：请与 anti-bot.jmx 放同目录，或用 -Jcsv=绝对路径 指定（Windows 路径请用正斜杠 /）&quot;)
+}
+def rows = f.readLines().findAll { it.trim() &amp;&amp; !it.trim().startsWith(&quot;token,&quot;) }
 if (rows.size() == 0) {
-  throw new RuntimeException("anti-bot-users.csv 没有有效账号行")
+  throw new RuntimeException(&quot;anti-bot-users.csv 没有有效账号行&quot;)
 }
-rows.eachWithIndex { line, i ->
-  def p = line.split(",").collect { it.trim() }
-  props.put("AB_TOKEN_" + (i + 1), p[0])
-  props.put("AB_PAX_" + (i + 1), p.size() > 1 ? p[1] : "1")
-  log.info("AB账号#" + (i + 1) + " token=" + p[0].take(16) + "... pax=" + (p.size() > 1 ? p[1] : "-"))
+rows.eachWithIndex { line, i -&gt;
+  def p = line.split(&quot;,&quot;).collect { it.trim() }
+  props.put(&quot;AB_TOKEN_&quot; + (i + 1), p[0])
+  props.put(&quot;AB_PAX_&quot; + (i + 1), p.size() &gt; 1 ? p[1] : &quot;1&quot;)
+  log.info(&quot;AB账号#&quot; + (i + 1) + &quot; token=&quot; + p[0].take(16) + &quot;... pax=&quot; + (p.size() &gt; 1 ? p[1] : &quot;-&quot;))
 }
-props.put("AB_USER_COUNT", String.valueOf(rows.size()))
+props.put(&quot;AB_USER_COUNT&quot;, String.valueOf(rows.size()))
 if (rows.size() &lt; 2) {
-  props.put("AB_TOKEN_2", props.get("AB_TOKEN_1"))
-  props.put("AB_PAX_2", props.get("AB_PAX_1"))
-  log.warn("CSV 只有 1 个账号：S4 将复用账号A，若返回 41005(验证码标记残留)属预期外，建议补第 2 行账号")
+  props.put(&quot;AB_TOKEN_2&quot;, props.get(&quot;AB_TOKEN_1&quot;))
+  props.put(&quot;AB_PAX_2&quot;, props.get(&quot;AB_PAX_1&quot;))
+  log.warn(&quot;CSV 只有 1 个账号：S4 将复用账号A，若返回 41005(验证码标记残留)属预期外，建议补第 2 行账号&quot;)
 }
-log.info("账号加载完成，共 " + rows.size() + " 个")</stringProp>
+log.info(&quot;账号加载完成，共 &quot; + rows.size() + &quot; 个&quot;)</stringProp>
         </JSR223Sampler>
         <hashTree/>
         <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="S0-网关连通检查(白名单余票查询)" enabled="true">
-          <boolProp name="HTTPSampler.postBodyRaw">false</boolProp>
-          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
-            <collectionProp name="Arguments.arguments"/>
-          </elementProp>
           <stringProp name="HTTPSampler.domain">${HOST}</stringProp>
           <stringProp name="HTTPSampler.port">${GPORT}</stringProp>
           <stringProp name="HTTPSampler.protocol">http</stringProp>
-          <stringProp name="HTTPSampler.path">/api/member/ticket/query?rideDate=${RIDE_DATE}&amp;fromStation=${FROM_ST}&amp;toStation=${TO_ST}</stringProp>
-          <stringProp name="HTTPSampler.method">GET</stringProp>
-          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
-          <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
-          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
           <stringProp name="HTTPSampler.contentEncoding">UTF-8</stringProp>
+          <stringProp name="HTTPSampler.path">/api/member/ticket/query?rideDate=${RIDE_DATE}&amp;fromStation=${FROM_ST}&amp;toStation=${TO_ST}</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <stringProp name="HTTPSampler.method">GET</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.postBodyRaw">false</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments" testname="用户定义的变量">
+            <collectionProp name="Arguments.arguments"/>
+          </elementProp>
         </HTTPSamplerProxy>
         <hashTree>
           <JSR223Assertion guiclass="TestBeanGUI" testclass="JSR223Assertion" testname="断言-网关可达且返回code=0" enabled="true">
@@ -132,44 +132,42 @@ log.info("账号加载完成，共 " + rows.size() + " 个")</stringProp>
             <stringProp name="script">def r = new groovy.json.JsonSlurper().parseText(prev.getResponseDataAsString())
 if (r.code != 0) {
   AssertionResult.setFailure(true)
-  AssertionResult.setFailureMessage("网关连通检查失败 code=" + r.code + " " + r.message + "，请确认 gateway(8000)/member 已启动，或用 -Jhost 指定正确地址")
+  AssertionResult.setFailureMessage(&quot;网关连通检查失败 code=&quot; + r.code + &quot; &quot; + r.message + &quot;，请确认 gateway(8000)/member 已启动，或用 -Jhost 指定正确地址&quot;)
 }</stringProp>
           </JSR223Assertion>
           <hashTree/>
         </hashTree>
       </hashTree>
       <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="S1-第一层JWT-无效凭证直接拒绝" enabled="true">
+        <intProp name="ThreadGroup.num_threads">1</intProp>
+        <intProp name="ThreadGroup.ramp_time">1</intProp>
+        <boolProp name="ThreadGroup.same_user_on_next_iteration">true</boolProp>
         <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
-        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" enabled="true">
-          <boolProp name="LoopController.continue_forever">false</boolProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController">
           <stringProp name="LoopController.loops">1</stringProp>
+          <boolProp name="LoopController.continue_forever">false</boolProp>
         </elementProp>
-        <stringProp name="ThreadGroup.num_threads">1</stringProp>
-        <stringProp name="ThreadGroup.ramp_time">1</stringProp>
-        <boolProp name="ThreadGroup.scheduler">false</boolProp>
-        <stringProp name="ThreadGroup.duration"></stringProp>
-        <stringProp name="ThreadGroup.delay"></stringProp>
       </ThreadGroup>
       <hashTree>
-        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="S1A1-裸请求无token" enabled="true">
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="S1A1-裸请求无token">
+          <stringProp name="HTTPSampler.domain">${HOST}</stringProp>
+          <stringProp name="HTTPSampler.port">${GPORT}</stringProp>
+          <stringProp name="HTTPSampler.protocol">http</stringProp>
+          <stringProp name="HTTPSampler.contentEncoding">UTF-8</stringProp>
+          <stringProp name="HTTPSampler.path">/api/member/order/create</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
           <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
           <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
             <collectionProp name="Arguments.arguments">
-              <elementProp name="" elementType="Argument">
-                <stringProp name="Argument.value">{"rideDate":"${RIDE_DATE}","trainCode":"${TRAIN_CODE}","fromStation":"${FROM_ST}","toStation":"${TO_ST}","seatType":${SEAT_TYPE},"passengerIds":[1]}</stringProp>
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&quot;rideDate&quot;:&quot;${RIDE_DATE}&quot;,&quot;trainCode&quot;:&quot;${TRAIN_CODE}&quot;,&quot;fromStation&quot;:&quot;${FROM_ST}&quot;,&quot;toStation&quot;:&quot;${TO_ST}&quot;,&quot;seatType&quot;:${SEAT_TYPE},&quot;passengerIds&quot;:[1]}</stringProp>
                 <stringProp name="Argument.metadata">=</stringProp>
               </elementProp>
             </collectionProp>
           </elementProp>
-          <stringProp name="HTTPSampler.domain">${HOST}</stringProp>
-          <stringProp name="HTTPSampler.port">${GPORT}</stringProp>
-          <stringProp name="HTTPSampler.protocol">http</stringProp>
-          <stringProp name="HTTPSampler.path">/api/member/order/create</stringProp>
-          <stringProp name="HTTPSampler.method">POST</stringProp>
-          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
-          <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
-          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
-          <stringProp name="HTTPSampler.contentEncoding">UTF-8</stringProp>
         </HTTPSamplerProxy>
         <hashTree>
           <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="头-仅ContentType(模拟无token裸脚本)" enabled="true">
@@ -187,34 +185,34 @@ if (r.code != 0) {
             <stringProp name="filename"></stringProp>
             <stringProp name="cacheKey">true</stringProp>
             <stringProp name="script">def code = new groovy.json.JsonSlurper().parseText(prev.getResponseDataAsString()).code
-if ("401".equals(prev.getResponseCode()) &amp;&amp; code == 40100) {
+if (&quot;401&quot;.equals(prev.getResponseCode()) &amp;&amp; code == 40100) {
   prev.setSuccessful(true)
 } else {
   AssertionResult.setFailure(true)
-  AssertionResult.setFailureMessage("预期 HTTP 401 + code=40100，实际 " + prev.getResponseCode() + " + " + code + " —— 第一层 JWT 未拦截")
+  AssertionResult.setFailureMessage(&quot;预期 HTTP 401 + code=40100，实际 &quot; + prev.getResponseCode() + &quot; + &quot; + code + &quot; —— 第一层 JWT 未拦截&quot;)
 }</stringProp>
           </JSR223Assertion>
           <hashTree/>
         </hashTree>
-        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="S1A2-伪造乱码token" enabled="true">
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="S1A2-伪造乱码token">
+          <stringProp name="HTTPSampler.domain">${HOST}</stringProp>
+          <stringProp name="HTTPSampler.port">${GPORT}</stringProp>
+          <stringProp name="HTTPSampler.protocol">http</stringProp>
+          <stringProp name="HTTPSampler.contentEncoding">UTF-8</stringProp>
+          <stringProp name="HTTPSampler.path">/api/member/order/create</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
           <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
           <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
             <collectionProp name="Arguments.arguments">
-              <elementProp name="" elementType="Argument">
-                <stringProp name="Argument.value">{"rideDate":"${RIDE_DATE}","trainCode":"${TRAIN_CODE}","fromStation":"${FROM_ST}","toStation":"${TO_ST}","seatType":${SEAT_TYPE},"passengerIds":[1]}</stringProp>
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&quot;rideDate&quot;:&quot;${RIDE_DATE}&quot;,&quot;trainCode&quot;:&quot;${TRAIN_CODE}&quot;,&quot;fromStation&quot;:&quot;${FROM_ST}&quot;,&quot;toStation&quot;:&quot;${TO_ST}&quot;,&quot;seatType&quot;:${SEAT_TYPE},&quot;passengerIds&quot;:[1]}</stringProp>
                 <stringProp name="Argument.metadata">=</stringProp>
               </elementProp>
             </collectionProp>
           </elementProp>
-          <stringProp name="HTTPSampler.domain">${HOST}</stringProp>
-          <stringProp name="HTTPSampler.port">${GPORT}</stringProp>
-          <stringProp name="HTTPSampler.protocol">http</stringProp>
-          <stringProp name="HTTPSampler.path">/api/member/order/create</stringProp>
-          <stringProp name="HTTPSampler.method">POST</stringProp>
-          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
-          <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
-          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
-          <stringProp name="HTTPSampler.contentEncoding">UTF-8</stringProp>
         </HTTPSamplerProxy>
         <hashTree>
           <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="头-伪造Authorization" enabled="true">
@@ -236,34 +234,34 @@ if ("401".equals(prev.getResponseCode()) &amp;&amp; code == 40100) {
             <stringProp name="filename"></stringProp>
             <stringProp name="cacheKey">true</stringProp>
             <stringProp name="script">def code = new groovy.json.JsonSlurper().parseText(prev.getResponseDataAsString()).code
-if ("401".equals(prev.getResponseCode()) &amp;&amp; code == 40100) {
+if (&quot;401&quot;.equals(prev.getResponseCode()) &amp;&amp; code == 40100) {
   prev.setSuccessful(true)
 } else {
   AssertionResult.setFailure(true)
-  AssertionResult.setFailureMessage("预期 HTTP 401 + code=40100，实际 " + prev.getResponseCode() + " + " + code + " —— 第一层 JWT 未拦截")
+  AssertionResult.setFailureMessage(&quot;预期 HTTP 401 + code=40100，实际 &quot; + prev.getResponseCode() + &quot; + &quot; + code + &quot; —— 第一层 JWT 未拦截&quot;)
 }</stringProp>
           </JSR223Assertion>
           <hashTree/>
         </hashTree>
-        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="S1A3-篡改payload不换签名" enabled="true">
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="S1A3-篡改payload不换签名">
+          <stringProp name="HTTPSampler.domain">${HOST}</stringProp>
+          <stringProp name="HTTPSampler.port">${GPORT}</stringProp>
+          <stringProp name="HTTPSampler.protocol">http</stringProp>
+          <stringProp name="HTTPSampler.contentEncoding">UTF-8</stringProp>
+          <stringProp name="HTTPSampler.path">/api/member/order/create</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
           <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
           <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
             <collectionProp name="Arguments.arguments">
-              <elementProp name="" elementType="Argument">
-                <stringProp name="Argument.value">{"rideDate":"${RIDE_DATE}","trainCode":"${TRAIN_CODE}","fromStation":"${FROM_ST}","toStation":"${TO_ST}","seatType":${SEAT_TYPE},"passengerIds":[1]}</stringProp>
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&quot;rideDate&quot;:&quot;${RIDE_DATE}&quot;,&quot;trainCode&quot;:&quot;${TRAIN_CODE}&quot;,&quot;fromStation&quot;:&quot;${FROM_ST}&quot;,&quot;toStation&quot;:&quot;${TO_ST}&quot;,&quot;seatType&quot;:${SEAT_TYPE},&quot;passengerIds&quot;:[1]}</stringProp>
                 <stringProp name="Argument.metadata">=</stringProp>
               </elementProp>
             </collectionProp>
           </elementProp>
-          <stringProp name="HTTPSampler.domain">${HOST}</stringProp>
-          <stringProp name="HTTPSampler.port">${GPORT}</stringProp>
-          <stringProp name="HTTPSampler.protocol">http</stringProp>
-          <stringProp name="HTTPSampler.path">/api/member/order/create</stringProp>
-          <stringProp name="HTTPSampler.method">POST</stringProp>
-          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
-          <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
-          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
-          <stringProp name="HTTPSampler.contentEncoding">UTF-8</stringProp>
         </HTTPSamplerProxy>
         <hashTree>
           <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="头-引用篡改后的token" enabled="true">
@@ -284,19 +282,19 @@ if ("401".equals(prev.getResponseCode()) &amp;&amp; code == 40100) {
             <stringProp name="parameters"></stringProp>
             <stringProp name="filename"></stringProp>
             <stringProp name="cacheKey">true</stringProp>
-            <stringProp name="script">def t = props.get("AB_TOKEN_1")
-def forged = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI5OTk5OTk5In0.Zm9yZ2VkLXNpZ25hdHVyZQ"
-if (t != null &amp;&amp; !t.contains("占位") &amp;&amp; t.split("\\.").length == 3) {
-  def parts = t.split("\\.")
-  def b64 = parts[1].replace('-', '+').replace('_', '/')
-  while (b64.length() % 4 != 0) { b64 = b64 + "=" }
-  def payload = new String(Base64.getDecoder().decode(b64), "UTF-8")
-  def tampered = payload.replaceFirst("\"sub\":\"[0-9]+\"", "\"sub\":\"999999999\"")
-  def nb = Base64.getUrlEncoder().withoutPadding().encodeToString(tampered.getBytes("UTF-8"))
-  forged = parts[0] + "." + nb + "." + parts[2]
-  log.info("S1A3 已把 payload 的 sub 改成 999999999，签名保持原样 —— 验签必失败")
+            <stringProp name="script">def t = props.get(&quot;AB_TOKEN_1&quot;)
+def forged = &quot;eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI5OTk5OTk5In0.Zm9yZ2VkLXNpZ25hdHVyZQ&quot;
+if (t != null &amp;&amp; !t.contains(&quot;占位&quot;) &amp;&amp; t.split(&quot;\\.&quot;).length == 3) {
+  def parts = t.split(&quot;\\.&quot;)
+  def b64 = parts[1].replace(&apos;-&apos;, &apos;+&apos;).replace(&apos;_&apos;, &apos;/&apos;)
+  while (b64.length() % 4 != 0) { b64 = b64 + &quot;=&quot; }
+  def payload = new String(Base64.getDecoder().decode(b64), &quot;UTF-8&quot;)
+  def tampered = payload.replaceFirst(&quot;\&quot;sub\&quot;:\&quot;[0-9]+\&quot;&quot;, &quot;\&quot;sub\&quot;:\&quot;999999999\&quot;&quot;)
+  def nb = Base64.getUrlEncoder().withoutPadding().encodeToString(tampered.getBytes(&quot;UTF-8&quot;))
+  forged = parts[0] + &quot;.&quot; + nb + &quot;.&quot; + parts[2]
+  log.info(&quot;S1A3 已把 payload 的 sub 改成 999999999，签名保持原样 —— 验签必失败&quot;)
 }
-vars.put("TAMPERED_TOKEN", forged)</stringProp>
+vars.put(&quot;TAMPERED_TOKEN&quot;, forged)</stringProp>
           </JSR223PreProcessor>
           <hashTree/>
           <JSR223Assertion guiclass="TestBeanGUI" testclass="JSR223Assertion" testname="断言-401+40100(防篡改)" enabled="true">
@@ -305,48 +303,46 @@ vars.put("TAMPERED_TOKEN", forged)</stringProp>
             <stringProp name="filename"></stringProp>
             <stringProp name="cacheKey">true</stringProp>
             <stringProp name="script">def code = new groovy.json.JsonSlurper().parseText(prev.getResponseDataAsString()).code
-if ("401".equals(prev.getResponseCode()) &amp;&amp; code == 40100) {
+if (&quot;401&quot;.equals(prev.getResponseCode()) &amp;&amp; code == 40100) {
   prev.setSuccessful(true)
 } else {
   AssertionResult.setFailure(true)
-  AssertionResult.setFailureMessage("预期 HTTP 401 + code=40100，实际 " + prev.getResponseCode() + " + " + code + " —— 篡改 payload 未被验签发现，JWT 防篡改失效")
+  AssertionResult.setFailureMessage(&quot;预期 HTTP 401 + code=40100，实际 &quot; + prev.getResponseCode() + &quot; + &quot; + code + &quot; —— 篡改 payload 未被验签发现，JWT 防篡改失效&quot;)
 }</stringProp>
           </JSR223Assertion>
           <hashTree/>
         </hashTree>
       </hashTree>
-      <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="S2a-第二层限流-USER维度(单账号高频)" enabled="true">
+      <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="S2a-第二层限流-USER维度(单账号高频)">
+        <intProp name="ThreadGroup.num_threads">1</intProp>
+        <intProp name="ThreadGroup.ramp_time">1</intProp>
+        <boolProp name="ThreadGroup.same_user_on_next_iteration">true</boolProp>
         <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
-        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" enabled="true">
-          <boolProp name="LoopController.continue_forever">false</boolProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController">
           <stringProp name="LoopController.loops">12</stringProp>
+          <boolProp name="LoopController.continue_forever">false</boolProp>
         </elementProp>
-        <stringProp name="ThreadGroup.num_threads">1</stringProp>
-        <stringProp name="ThreadGroup.ramp_time">1</stringProp>
-        <boolProp name="ThreadGroup.scheduler">false</boolProp>
-        <stringProp name="ThreadGroup.duration"></stringProp>
-        <stringProp name="ThreadGroup.delay"></stringProp>
       </ThreadGroup>
       <hashTree>
-        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="S2a-固定userId连发12次" enabled="true">
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="S2a-固定userId连发12次">
+          <stringProp name="HTTPSampler.domain">${HOST}</stringProp>
+          <stringProp name="HTTPSampler.port">${MPORT}</stringProp>
+          <stringProp name="HTTPSampler.protocol">http</stringProp>
+          <stringProp name="HTTPSampler.contentEncoding">UTF-8</stringProp>
+          <stringProp name="HTTPSampler.path">/order/create</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
           <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
           <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
             <collectionProp name="Arguments.arguments">
-              <elementProp name="" elementType="Argument">
-                <stringProp name="Argument.value">{"rideDate":"${RIDE_DATE}","trainCode":"${TRAIN_CODE}","fromStation":"${FROM_ST}","toStation":"${TO_ST}","seatType":${SEAT_TYPE},"passengerIds":[1]}</stringProp>
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&quot;rideDate&quot;:&quot;${RIDE_DATE}&quot;,&quot;trainCode&quot;:&quot;${TRAIN_CODE}&quot;,&quot;fromStation&quot;:&quot;${FROM_ST}&quot;,&quot;toStation&quot;:&quot;${TO_ST}&quot;,&quot;seatType&quot;:${SEAT_TYPE},&quot;passengerIds&quot;:[1]}</stringProp>
                 <stringProp name="Argument.metadata">=</stringProp>
               </elementProp>
             </collectionProp>
           </elementProp>
-          <stringProp name="HTTPSampler.domain">${HOST}</stringProp>
-          <stringProp name="HTTPSampler.port">${MPORT}</stringProp>
-          <stringProp name="HTTPSampler.protocol">http</stringProp>
-          <stringProp name="HTTPSampler.path">/order/create</stringProp>
-          <stringProp name="HTTPSampler.method">POST</stringProp>
-          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
-          <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
-          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
-          <stringProp name="HTTPSampler.contentEncoding">UTF-8</stringProp>
         </HTTPSamplerProxy>
         <hashTree>
           <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="头-固定userId+随机IP+随机设备" enabled="true">
@@ -360,12 +356,16 @@ if ("401".equals(prev.getResponseCode()) &amp;&amp; code == 40100) {
                 <stringProp name="Header.value">${FAKE_USER}</stringProp>
               </elementProp>
               <elementProp name="" elementType="Header">
+                <stringProp name="Header.name">X-User-Type</stringProp>
+                <stringProp name="Header.value">M</stringProp>
+              </elementProp>
+              <elementProp name="" elementType="Header">
                 <stringProp name="Header.name">X-Forwarded-For</stringProp>
-                <stringProp name="Header.value">${__groovy('10.'+(1+(int)(Math.random()*250))+'.'+(1+(int)(Math.random()*250))+'.'+(1+(int)(Math.random()*250)))}</stringProp>
+                <stringProp name="Header.value">${__groovy(&apos;10.&apos;+(1+(int)(Math.random()*250))+&apos;.&apos;+(1+(int)(Math.random()*250))+&apos;.&apos;+(1+(int)(Math.random()*250)))}</stringProp>
               </elementProp>
               <elementProp name="" elementType="Header">
                 <stringProp name="Header.name">X-Device-Id</stringProp>
-                <stringProp name="Header.value">${__groovy('dev-'+UUID.randomUUID())}</stringProp>
+                <stringProp name="Header.value">${__groovy(&apos;dev-&apos;+UUID.randomUUID())}</stringProp>
               </elementProp>
             </collectionProp>
           </HeaderManager>
@@ -374,23 +374,23 @@ if ("401".equals(prev.getResponseCode()) &amp;&amp; code == 40100) {
             <stringProp name="ConstantTimer.delay">20</stringProp>
           </ConstantTimer>
           <hashTree/>
-          <JSR223Assertion guiclass="TestBeanGUI" testclass="JSR223Assertion" testname="断言-第4单起41005,第11单起42900(USER文案)" enabled="true">
+          <JSR223Assertion guiclass="TestBeanGUI" testclass="JSR223Assertion" testname="断言-第5单起41005,第11单起42900(USER文案)" enabled="true">
             <stringProp name="scriptLanguage">groovy</stringProp>
             <stringProp name="parameters"></stringProp>
             <stringProp name="filename"></stringProp>
             <stringProp name="cacheKey">true</stringProp>
             <stringProp name="script">def r = new groovy.json.JsonSlurper().parseText(prev.getResponseDataAsString())
 def it = vars.getIteration()
-if (it >= 11) {
-  if (r.code != 42900 || r.message != "下单太频繁啦，休息一下") {
+if (it &gt;= 11) {
+  if (r.code != 42900 || r.message != &quot;下单太频繁啦，休息一下&quot;) {
     AssertionResult.setFailure(true)
-    AssertionResult.setFailureMessage("第" + it + "次应触发 USER 维度限流(42900/下单太频繁啦，休息一下)，实际 code=" + r.code + " message=" + r.message)
+    AssertionResult.setFailureMessage(&quot;第&quot; + it + &quot;次应触发 USER 维度限流(42900/下单太频繁啦，休息一下)，实际 code=&quot; + r.code + &quot; message=&quot; + r.message)
   }
 } else {
-  def expect = (it &lt;= 3) ? 41009 : 41005
+  def expect = (it &lt;= 4) ? 41009 : 41005
   if (r.code != expect) {
     AssertionResult.setFailure(true)
-    AssertionResult.setFailureMessage("第" + it + "次预期 " + expect + "(假乘车人被拦/验证码标记后缺码)，实际 " + r.code + " " + r.message)
+    AssertionResult.setFailureMessage(&quot;第&quot; + it + &quot;次预期 &quot; + expect + &quot;(假乘车人被拦/验证码标记后缺码)，实际 &quot; + r.code + &quot; &quot; + r.message)
   }
 }</stringProp>
           </JSR223Assertion>
@@ -398,37 +398,35 @@ if (it >= 11) {
         </hashTree>
       </hashTree>
       <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="S2b-第二层限流-IP维度(多账号同IP)" enabled="true">
+        <intProp name="ThreadGroup.num_threads">1</intProp>
+        <intProp name="ThreadGroup.ramp_time">1</intProp>
+        <boolProp name="ThreadGroup.same_user_on_next_iteration">true</boolProp>
         <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
-        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" enabled="true">
-          <boolProp name="LoopController.continue_forever">false</boolProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController">
           <stringProp name="LoopController.loops">12</stringProp>
+          <boolProp name="LoopController.continue_forever">false</boolProp>
         </elementProp>
-        <stringProp name="ThreadGroup.num_threads">1</stringProp>
-        <stringProp name="ThreadGroup.ramp_time">1</stringProp>
-        <boolProp name="ThreadGroup.scheduler">false</boolProp>
-        <stringProp name="ThreadGroup.duration"></stringProp>
-        <stringProp name="ThreadGroup.delay"></stringProp>
       </ThreadGroup>
       <hashTree>
-        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="S2b-随机账号+固定IP连发12次" enabled="true">
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="S2b-随机账号+固定IP连发12次">
+          <stringProp name="HTTPSampler.domain">${HOST}</stringProp>
+          <stringProp name="HTTPSampler.port">${MPORT}</stringProp>
+          <stringProp name="HTTPSampler.protocol">http</stringProp>
+          <stringProp name="HTTPSampler.contentEncoding">UTF-8</stringProp>
+          <stringProp name="HTTPSampler.path">/order/create</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
           <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
           <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
             <collectionProp name="Arguments.arguments">
-              <elementProp name="" elementType="Argument">
-                <stringProp name="Argument.value">{"rideDate":"${RIDE_DATE}","trainCode":"${TRAIN_CODE}","fromStation":"${FROM_ST}","toStation":"${TO_ST}","seatType":${SEAT_TYPE},"passengerIds":[1]}</stringProp>
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&quot;rideDate&quot;:&quot;${RIDE_DATE}&quot;,&quot;trainCode&quot;:&quot;${TRAIN_CODE}&quot;,&quot;fromStation&quot;:&quot;${FROM_ST}&quot;,&quot;toStation&quot;:&quot;${TO_ST}&quot;,&quot;seatType&quot;:${SEAT_TYPE},&quot;passengerIds&quot;:[1]}</stringProp>
                 <stringProp name="Argument.metadata">=</stringProp>
               </elementProp>
             </collectionProp>
           </elementProp>
-          <stringProp name="HTTPSampler.domain">${HOST}</stringProp>
-          <stringProp name="HTTPSampler.port">${MPORT}</stringProp>
-          <stringProp name="HTTPSampler.protocol">http</stringProp>
-          <stringProp name="HTTPSampler.path">/order/create</stringProp>
-          <stringProp name="HTTPSampler.method">POST</stringProp>
-          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
-          <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
-          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
-          <stringProp name="HTTPSampler.contentEncoding">UTF-8</stringProp>
         </HTTPSamplerProxy>
         <hashTree>
           <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="头-固定IP+随机userId+随机设备" enabled="true">
@@ -442,12 +440,16 @@ if (it >= 11) {
                 <stringProp name="Header.value">${__groovy(880000000000000000L+(long)(Math.random()*99999999999999L))}</stringProp>
               </elementProp>
               <elementProp name="" elementType="Header">
+                <stringProp name="Header.name">X-User-Type</stringProp>
+                <stringProp name="Header.value">M</stringProp>
+              </elementProp>
+              <elementProp name="" elementType="Header">
                 <stringProp name="Header.name">X-Forwarded-For</stringProp>
                 <stringProp name="Header.value">${FAKE_IP}</stringProp>
               </elementProp>
               <elementProp name="" elementType="Header">
                 <stringProp name="Header.name">X-Device-Id</stringProp>
-                <stringProp name="Header.value">${__groovy('dev-'+UUID.randomUUID())}</stringProp>
+                <stringProp name="Header.value">${__groovy(&apos;dev-&apos;+UUID.randomUUID())}</stringProp>
               </elementProp>
             </collectionProp>
           </HeaderManager>
@@ -466,48 +468,46 @@ def it = vars.getIteration()
 def expect = (it &lt;= 10) ? 41009 : 42900
 if (r.code != expect) {
   AssertionResult.setFailure(true)
-  AssertionResult.setFailureMessage("第" + it + "次预期 " + expect + "，实际 " + r.code + " " + r.message + "(IP桶唯一固定维度，第11次必来自IP限流)")
+  AssertionResult.setFailureMessage(&quot;第&quot; + it + &quot;次预期 &quot; + expect + &quot;，实际 &quot; + r.code + &quot; &quot; + r.message + &quot;(IP桶唯一固定维度，第11次必来自IP限流)&quot;)
 }
-if (it >= 11 &amp;&amp; r.code == 42900 &amp;&amp; r.message != "下单太频繁啦，请稍后重试") {
+if (it &gt;= 11 &amp;&amp; r.code == 42900 &amp;&amp; r.message != &quot;下单太频繁啦，请稍后重试&quot;) {
   AssertionResult.setFailure(true)
-  AssertionResult.setFailureMessage("IP/DEVICE 维度文案应为「请稍后重试」，实际 " + r.message + " —— 可能误触发 USER 维度")
+  AssertionResult.setFailureMessage(&quot;IP/DEVICE 维度文案应为「请稍后重试」，实际 &quot; + r.message + &quot; —— 可能误触发 USER 维度&quot;)
 }</stringProp>
           </JSR223Assertion>
           <hashTree/>
         </hashTree>
       </hashTree>
       <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="S2c-第二层限流-DEVICE维度(同指纹多账号)" enabled="true">
+        <intProp name="ThreadGroup.num_threads">1</intProp>
+        <intProp name="ThreadGroup.ramp_time">1</intProp>
+        <boolProp name="ThreadGroup.same_user_on_next_iteration">true</boolProp>
         <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
-        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" enabled="true">
-          <boolProp name="LoopController.continue_forever">false</boolProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController">
           <stringProp name="LoopController.loops">12</stringProp>
+          <boolProp name="LoopController.continue_forever">false</boolProp>
         </elementProp>
-        <stringProp name="ThreadGroup.num_threads">1</stringProp>
-        <stringProp name="ThreadGroup.ramp_time">1</stringProp>
-        <boolProp name="ThreadGroup.scheduler">false</boolProp>
-        <stringProp name="ThreadGroup.duration"></stringProp>
-        <stringProp name="ThreadGroup.delay"></stringProp>
       </ThreadGroup>
       <hashTree>
         <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="S2c-随机账号+随机IP+固定指纹连发12次" enabled="true">
+          <stringProp name="HTTPSampler.domain">${HOST}</stringProp>
+          <stringProp name="HTTPSampler.port">${MPORT}</stringProp>
+          <stringProp name="HTTPSampler.protocol">http</stringProp>
+          <stringProp name="HTTPSampler.contentEncoding">UTF-8</stringProp>
+          <stringProp name="HTTPSampler.path">/order/create</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
           <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
           <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
             <collectionProp name="Arguments.arguments">
-              <elementProp name="" elementType="Argument">
-                <stringProp name="Argument.value">{"rideDate":"${RIDE_DATE}","trainCode":"${TRAIN_CODE}","fromStation":"${FROM_ST}","toStation":"${TO_ST}","seatType":${SEAT_TYPE},"passengerIds":[1]}</stringProp>
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&quot;rideDate&quot;:&quot;${RIDE_DATE}&quot;,&quot;trainCode&quot;:&quot;${TRAIN_CODE}&quot;,&quot;fromStation&quot;:&quot;${FROM_ST}&quot;,&quot;toStation&quot;:&quot;${TO_ST}&quot;,&quot;seatType&quot;:${SEAT_TYPE},&quot;passengerIds&quot;:[1]}</stringProp>
                 <stringProp name="Argument.metadata">=</stringProp>
               </elementProp>
             </collectionProp>
           </elementProp>
-          <stringProp name="HTTPSampler.domain">${HOST}</stringProp>
-          <stringProp name="HTTPSampler.port">${MPORT}</stringProp>
-          <stringProp name="HTTPSampler.protocol">http</stringProp>
-          <stringProp name="HTTPSampler.path">/order/create</stringProp>
-          <stringProp name="HTTPSampler.method">POST</stringProp>
-          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
-          <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
-          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
-          <stringProp name="HTTPSampler.contentEncoding">UTF-8</stringProp>
         </HTTPSamplerProxy>
         <hashTree>
           <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="头-固定指纹+随机userId+随机IP" enabled="true">
@@ -521,8 +521,12 @@ if (it >= 11 &amp;&amp; r.code == 42900 &amp;&amp; r.message != "下单太频繁
                 <stringProp name="Header.value">${__groovy(880000000000000000L+(long)(Math.random()*99999999999999L))}</stringProp>
               </elementProp>
               <elementProp name="" elementType="Header">
+                <stringProp name="Header.name">X-User-Type</stringProp>
+                <stringProp name="Header.value">M</stringProp>
+              </elementProp>
+              <elementProp name="" elementType="Header">
                 <stringProp name="Header.name">X-Forwarded-For</stringProp>
-                <stringProp name="Header.value">${__groovy('10.'+(1+(int)(Math.random()*250))+'.'+(1+(int)(Math.random()*250))+'.'+(1+(int)(Math.random()*250)))}</stringProp>
+                <stringProp name="Header.value">${__groovy(&apos;10.&apos;+(1+(int)(Math.random()*250))+&apos;.&apos;+(1+(int)(Math.random()*250))+&apos;.&apos;+(1+(int)(Math.random()*250)))}</stringProp>
               </elementProp>
               <elementProp name="" elementType="Header">
                 <stringProp name="Header.name">X-Device-Id</stringProp>
@@ -545,44 +549,42 @@ def it = vars.getIteration()
 def expect = (it &lt;= 10) ? 41009 : 42900
 if (r.code != expect) {
   AssertionResult.setFailure(true)
-  AssertionResult.setFailureMessage("第" + it + "次预期 " + expect + "，实际 " + r.code + " " + r.message + "(user/ip 均随机不超限，第11次必来自 DEVICE 维度)")
+  AssertionResult.setFailureMessage(&quot;第&quot; + it + &quot;次预期 &quot; + expect + &quot;，实际 &quot; + r.code + &quot; &quot; + r.message + &quot;(user/ip 均随机不超限，第11次必来自 DEVICE 维度)&quot;)
 }</stringProp>
           </JSR223Assertion>
           <hashTree/>
         </hashTree>
       </hashTree>
       <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="S3-第三层验证码-高频下单强制验码" enabled="true">
+        <intProp name="ThreadGroup.num_threads">1</intProp>
+        <intProp name="ThreadGroup.ramp_time">1</intProp>
+        <boolProp name="ThreadGroup.same_user_on_next_iteration">true</boolProp>
         <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
-        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" enabled="true">
-          <boolProp name="LoopController.continue_forever">false</boolProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController">
           <stringProp name="LoopController.loops">5</stringProp>
+          <boolProp name="LoopController.continue_forever">false</boolProp>
         </elementProp>
-        <stringProp name="ThreadGroup.num_threads">1</stringProp>
-        <stringProp name="ThreadGroup.ramp_time">1</stringProp>
-        <boolProp name="ThreadGroup.scheduler">false</boolProp>
-        <stringProp name="ThreadGroup.duration"></stringProp>
-        <stringProp name="ThreadGroup.delay"></stringProp>
       </ThreadGroup>
       <hashTree>
         <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="S3-真实账号A连发5单(1~3无标记,4~5缺码/错码)" enabled="true">
+          <stringProp name="HTTPSampler.domain">${HOST}</stringProp>
+          <stringProp name="HTTPSampler.port">${GPORT}</stringProp>
+          <stringProp name="HTTPSampler.protocol">http</stringProp>
+          <stringProp name="HTTPSampler.contentEncoding">UTF-8</stringProp>
+          <stringProp name="HTTPSampler.path">/api/member/order/create</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
           <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
           <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
             <collectionProp name="Arguments.arguments">
-              <elementProp name="" elementType="Argument">
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
                 <stringProp name="Argument.value">PLACEHOLDER_BODY</stringProp>
                 <stringProp name="Argument.metadata">=</stringProp>
               </elementProp>
             </collectionProp>
           </elementProp>
-          <stringProp name="HTTPSampler.domain">${HOST}</stringProp>
-          <stringProp name="HTTPSampler.port">${GPORT}</stringProp>
-          <stringProp name="HTTPSampler.protocol">http</stringProp>
-          <stringProp name="HTTPSampler.path">/api/member/order/create</stringProp>
-          <stringProp name="HTTPSampler.method">POST</stringProp>
-          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
-          <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
-          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
-          <stringProp name="HTTPSampler.contentEncoding">UTF-8</stringProp>
         </HTTPSamplerProxy>
         <hashTree>
           <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="头-账号A token+随机设备指纹" enabled="true">
@@ -597,7 +599,7 @@ if (r.code != expect) {
               </elementProp>
               <elementProp name="" elementType="Header">
                 <stringProp name="Header.name">X-Device-Id</stringProp>
-                <stringProp name="Header.value">${__groovy('dev-'+UUID.randomUUID())}</stringProp>
+                <stringProp name="Header.value">${__groovy(&apos;dev-&apos;+UUID.randomUUID())}</stringProp>
               </elementProp>
             </collectionProp>
           </HeaderManager>
@@ -608,9 +610,9 @@ if (r.code != expect) {
             <stringProp name="filename"></stringProp>
             <stringProp name="cacheKey">true</stringProp>
             <stringProp name="script">def it = vars.getIteration()
-def body = '{"rideDate":"' + vars.get("RIDE_DATE") + '","trainCode":"' + vars.get("TRAIN_CODE") + '","fromStation":"' + vars.get("FROM_ST") + '","toStation":"' + vars.get("TO_ST") + '","seatType":' + vars.get("SEAT_TYPE") + ',"passengerIds":[1]}'
+def body = &apos;{&quot;rideDate&quot;:&quot;&apos; + vars.get(&quot;RIDE_DATE&quot;) + &apos;&quot;,&quot;trainCode&quot;:&quot;&apos; + vars.get(&quot;TRAIN_CODE&quot;) + &apos;&quot;,&quot;fromStation&quot;:&quot;&apos; + vars.get(&quot;FROM_ST&quot;) + &apos;&quot;,&quot;toStation&quot;:&quot;&apos; + vars.get(&quot;TO_ST&quot;) + &apos;&quot;,&quot;seatType&quot;:&apos; + vars.get(&quot;SEAT_TYPE&quot;) + &apos;,&quot;passengerIds&quot;:[1]}&apos;
 if (it == 5) {
-  body = body.substring(0, body.length() - 1) + ',"captchaKey":"not-exist-key","captchaCode":"ZZZZ"}'
+  body = body.substring(0, body.length() - 1) + &apos;,&quot;captchaKey&quot;:&quot;not-exist-key&quot;,&quot;captchaCode&quot;:&quot;ZZZZ&quot;}&apos;
 }
 sampler.getArguments().getArgument(0).setValue(body)</stringProp>
           </JSR223PreProcessor>
@@ -619,57 +621,55 @@ sampler.getArguments().getArgument(0).setValue(body)</stringProp>
             <stringProp name="ConstantTimer.delay">100</stringProp>
           </ConstantTimer>
           <hashTree/>
-          <JSR223Assertion guiclass="TestBeanGUI" testclass="JSR223Assertion" testname="断言-1~3次41009,4~5次41005" enabled="true">
+          <JSR223Assertion guiclass="TestBeanGUI" testclass="JSR223Assertion" testname="断言-1~4次41009,第5次41005" enabled="true">
             <stringProp name="scriptLanguage">groovy</stringProp>
             <stringProp name="parameters"></stringProp>
             <stringProp name="filename"></stringProp>
             <stringProp name="cacheKey">true</stringProp>
             <stringProp name="script">def r = new groovy.json.JsonSlurper().parseText(prev.getResponseDataAsString())
 def it = vars.getIteration()
-def expect = (it &lt;= 3) ? 41009 : 41005
+def expect = (it &lt;= 4) ? 41009 : 41005
 if (r.code != expect) {
-  def hint = ""
-  if (r.code == 42900) { hint = "60s 滑窗内有其他下单污染了限流桶，等 60s 重跑" }
-  else if (r.code == 40100) { hint = "账号A token 失效，重新从浏览器取" }
+  def hint = &quot;&quot;
+  if (r.code == 42900) { hint = &quot;60s 滑窗内有其他下单污染了限流桶，等 60s 重跑&quot; }
+  else if (r.code == 40100) { hint = &quot;账号A token 失效，重新从浏览器取&quot; }
   AssertionResult.setFailure(true)
-  AssertionResult.setFailureMessage("第" + it + "次预期 " + expect + "(60s内第4单起强制验证码)，实际 " + r.code + " " + r.message + " " + hint)
+  AssertionResult.setFailureMessage(&quot;第&quot; + it + &quot;次预期 &quot; + expect + &quot;(60s内第4单起强制验证码)，实际 &quot; + r.code + &quot; &quot; + r.message + &quot; &quot; + hint)
 }</stringProp>
           </JSR223Assertion>
           <hashTree/>
         </hashTree>
       </hashTree>
       <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="S4-第四层令牌大闸-令牌耗尽拒单" enabled="true">
+        <intProp name="ThreadGroup.num_threads">1</intProp>
+        <intProp name="ThreadGroup.ramp_time">1</intProp>
+        <boolProp name="ThreadGroup.same_user_on_next_iteration">true</boolProp>
         <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
-        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" enabled="true">
-          <boolProp name="LoopController.continue_forever">false</boolProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController">
           <stringProp name="LoopController.loops">1</stringProp>
+          <boolProp name="LoopController.continue_forever">false</boolProp>
         </elementProp>
-        <stringProp name="ThreadGroup.num_threads">1</stringProp>
-        <stringProp name="ThreadGroup.ramp_time">1</stringProp>
-        <boolProp name="ThreadGroup.scheduler">false</boolProp>
-        <stringProp name="ThreadGroup.duration"></stringProp>
-        <stringProp name="ThreadGroup.delay"></stringProp>
       </ThreadGroup>
       <hashTree>
         <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="S4-账号B正常下单(令牌已被置0)" enabled="true">
+          <stringProp name="HTTPSampler.domain">${HOST}</stringProp>
+          <stringProp name="HTTPSampler.port">${GPORT}</stringProp>
+          <stringProp name="HTTPSampler.protocol">http</stringProp>
+          <stringProp name="HTTPSampler.contentEncoding">UTF-8</stringProp>
+          <stringProp name="HTTPSampler.path">/api/member/order/create</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
           <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
           <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
             <collectionProp name="Arguments.arguments">
-              <elementProp name="" elementType="Argument">
-                <stringProp name="Argument.value">{"rideDate":"${RIDE_DATE}","trainCode":"${TRAIN_CODE}","fromStation":"${FROM_ST}","toStation":"${TO_ST}","seatType":${SEAT_TYPE},"passengerIds":[${__P(AB_PAX_2)}]}</stringProp>
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&quot;rideDate&quot;:&quot;${RIDE_DATE}&quot;,&quot;trainCode&quot;:&quot;${TRAIN_CODE}&quot;,&quot;fromStation&quot;:&quot;${FROM_ST}&quot;,&quot;toStation&quot;:&quot;${TO_ST}&quot;,&quot;seatType&quot;:${SEAT_TYPE},&quot;passengerIds&quot;:[${__P(AB_PAX_2)}]}</stringProp>
                 <stringProp name="Argument.metadata">=</stringProp>
               </elementProp>
             </collectionProp>
           </elementProp>
-          <stringProp name="HTTPSampler.domain">${HOST}</stringProp>
-          <stringProp name="HTTPSampler.port">${GPORT}</stringProp>
-          <stringProp name="HTTPSampler.protocol">http</stringProp>
-          <stringProp name="HTTPSampler.path">/api/member/order/create</stringProp>
-          <stringProp name="HTTPSampler.method">POST</stringProp>
-          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
-          <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
-          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
-          <stringProp name="HTTPSampler.contentEncoding">UTF-8</stringProp>
         </HTTPSamplerProxy>
         <hashTree>
           <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="头-账号B token+随机设备" enabled="true">
@@ -684,7 +684,7 @@ if (r.code != expect) {
               </elementProp>
               <elementProp name="" elementType="Header">
                 <stringProp name="Header.name">X-Device-Id</stringProp>
-                <stringProp name="Header.value">${__groovy('dev-'+UUID.randomUUID())}</stringProp>
+                <stringProp name="Header.value">${__groovy(&apos;dev-&apos;+UUID.randomUUID())}</stringProp>
               </elementProp>
             </collectionProp>
           </HeaderManager>
@@ -696,50 +696,48 @@ if (r.code != expect) {
             <stringProp name="cacheKey">true</stringProp>
             <stringProp name="script">def r = new groovy.json.JsonSlurper().parseText(prev.getResponseDataAsString())
 if (r.code != 43008) {
-  def hint = ""
-  if (r.code == 0) { hint = "真实成单! 令牌未置零或已懒重建，先执行 anti-bot.md 里的 Redis SET 0 再重跑，并取消该订单" }
-  else if (r.code == 41005) { hint = "账号B 被验证码标记(10分钟TTL)，换账号或手动清 ntrain:order:captcha:required:*" }
-  else if (r.code == 42900) { hint = "限流桶未清(60s滑窗)，稍后重跑" }
-  else if (r.code == 41009) { hint = "passengerId 不属于账号B，检查 CSV 第2行" }
+  def hint = &quot;&quot;
+  if (r.code == 0) { hint = &quot;真实成单! 令牌未置零或已懒重建，先执行 anti-bot.md 里的 Redis SET 0 再重跑，并取消该订单&quot; }
+  else if (r.code == 41005) { hint = &quot;账号B 被验证码标记(10分钟TTL)，换账号或手动清 ntrain:order:captcha:required:*&quot; }
+  else if (r.code == 42900) { hint = &quot;限流桶未清(60s滑窗)，稍后重跑&quot; }
+  else if (r.code == 41009) { hint = &quot;passengerId 不属于账号B，检查 CSV 第2行&quot; }
   AssertionResult.setFailure(true)
-  AssertionResult.setFailureMessage("令牌大闸未拦截：code=" + r.code + " " + r.message + "。提示：" + hint)
+  AssertionResult.setFailureMessage(&quot;令牌大闸未拦截：code=&quot; + r.code + &quot; &quot; + r.message + &quot;。提示：&quot; + hint)
 }</stringProp>
           </JSR223Assertion>
           <hashTree/>
         </hashTree>
       </hashTree>
       <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="S2d-第二层综合-多账号同IP并发刷票" enabled="true">
+        <intProp name="ThreadGroup.num_threads">3</intProp>
+        <intProp name="ThreadGroup.ramp_time">1</intProp>
+        <boolProp name="ThreadGroup.same_user_on_next_iteration">true</boolProp>
         <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
-        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" enabled="true">
-          <boolProp name="LoopController.continue_forever">false</boolProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController">
           <stringProp name="LoopController.loops">12</stringProp>
+          <boolProp name="LoopController.continue_forever">false</boolProp>
         </elementProp>
-        <stringProp name="ThreadGroup.num_threads">3</stringProp>
-        <stringProp name="ThreadGroup.ramp_time">1</stringProp>
-        <boolProp name="ThreadGroup.scheduler">false</boolProp>
-        <stringProp name="ThreadGroup.duration"></stringProp>
-        <stringProp name="ThreadGroup.delay"></stringProp>
       </ThreadGroup>
       <hashTree>
         <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="S2d-3账号x12次并发(真实token,假乘车人)" enabled="true">
+          <stringProp name="HTTPSampler.domain">${HOST}</stringProp>
+          <stringProp name="HTTPSampler.port">${GPORT}</stringProp>
+          <stringProp name="HTTPSampler.protocol">http</stringProp>
+          <stringProp name="HTTPSampler.contentEncoding">UTF-8</stringProp>
+          <stringProp name="HTTPSampler.path">/api/member/order/create</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
           <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
           <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
             <collectionProp name="Arguments.arguments">
-              <elementProp name="" elementType="Argument">
-                <stringProp name="Argument.value">{"rideDate":"${RIDE_DATE}","trainCode":"${TRAIN_CODE}","fromStation":"${FROM_ST}","toStation":"${TO_ST}","seatType":${SEAT_TYPE},"passengerIds":[1]}</stringProp>
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&quot;rideDate&quot;:&quot;${RIDE_DATE}&quot;,&quot;trainCode&quot;:&quot;${TRAIN_CODE}&quot;,&quot;fromStation&quot;:&quot;${FROM_ST}&quot;,&quot;toStation&quot;:&quot;${TO_ST}&quot;,&quot;seatType&quot;:${SEAT_TYPE},&quot;passengerIds&quot;:[1]}</stringProp>
                 <stringProp name="Argument.metadata">=</stringProp>
               </elementProp>
             </collectionProp>
           </elementProp>
-          <stringProp name="HTTPSampler.domain">${HOST}</stringProp>
-          <stringProp name="HTTPSampler.port">${GPORT}</stringProp>
-          <stringProp name="HTTPSampler.protocol">http</stringProp>
-          <stringProp name="HTTPSampler.path">/api/member/order/create</stringProp>
-          <stringProp name="HTTPSampler.method">POST</stringProp>
-          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
-          <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
-          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
-          <stringProp name="HTTPSampler.contentEncoding">UTF-8</stringProp>
         </HTTPSamplerProxy>
         <hashTree>
           <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="头-每线程绑定一个账号+随机指纹" enabled="true">
@@ -754,7 +752,7 @@ if (r.code != 43008) {
               </elementProp>
               <elementProp name="" elementType="Header">
                 <stringProp name="Header.name">X-Device-Id</stringProp>
-                <stringProp name="Header.value">${__groovy('dev-'+UUID.randomUUID())}</stringProp>
+                <stringProp name="Header.value">${__groovy(&apos;dev-&apos;+UUID.randomUUID())}</stringProp>
               </elementProp>
             </collectionProp>
           </HeaderManager>
@@ -764,10 +762,10 @@ if (r.code != 43008) {
             <stringProp name="parameters"></stringProp>
             <stringProp name="filename"></stringProp>
             <stringProp name="cacheKey">true</stringProp>
-            <stringProp name="script">def n = Integer.parseInt(props.get("AB_USER_COUNT") ?: "1")
+            <stringProp name="script">def n = Integer.parseInt(props.get(&quot;AB_USER_COUNT&quot;) ?: &quot;1&quot;)
 def idx = Math.min(ctx.getThreadNum() + 1, n)
-vars.put("TK", props.get("AB_TOKEN_" + idx) ?: "no-token")
-log.info("线程" + ctx.getThreadNum() + " 绑定账号#" + idx)</stringProp>
+vars.put(&quot;TK&quot;, props.get(&quot;AB_TOKEN_&quot; + idx) ?: &quot;no-token&quot;)
+log.info(&quot;线程&quot; + ctx.getThreadNum() + &quot; 绑定账号#&quot; + idx)</stringProp>
           </JSR223PreProcessor>
           <hashTree/>
           <ConstantTimer guiclass="ConstantTimerGui" testclass="ConstantTimer" testname="定时器-20ms" enabled="true">
@@ -783,23 +781,21 @@ log.info("线程" + ctx.getThreadNum() + " 绑定账号#" + idx)</stringProp>
 def allowed = [41005, 41009, 42900] as Set
 if (!allowed.contains(r.code)) {
   AssertionResult.setFailure(true)
-  AssertionResult.setFailureMessage("多账号同IP并发：code=" + r.code + " 不在预期集合(41005验证码/41009乘车人/42900限流)，0=成单说明被穿透")
+  AssertionResult.setFailureMessage(&quot;多账号同IP并发：code=&quot; + r.code + &quot; 不在预期集合(41005验证码/41009乘车人/42900限流)，0=成单说明被穿透&quot;)
 }</stringProp>
           </JSR223Assertion>
           <hashTree/>
         </hashTree>
       </hashTree>
       <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="S5-全链路混战(默认禁用,验证时手动开启)" enabled="false">
+        <intProp name="ThreadGroup.num_threads">10</intProp>
+        <intProp name="ThreadGroup.ramp_time">2</intProp>
+        <boolProp name="ThreadGroup.same_user_on_next_iteration">true</boolProp>
         <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
-        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" enabled="true">
-          <boolProp name="LoopController.continue_forever">false</boolProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController">
           <stringProp name="LoopController.loops">20</stringProp>
+          <boolProp name="LoopController.continue_forever">false</boolProp>
         </elementProp>
-        <stringProp name="ThreadGroup.num_threads">10</stringProp>
-        <stringProp name="ThreadGroup.ramp_time">2</stringProp>
-        <boolProp name="ThreadGroup.scheduler">false</boolProp>
-        <stringProp name="ThreadGroup.duration"></stringProp>
-        <stringProp name="ThreadGroup.delay"></stringProp>
       </ThreadGroup>
       <hashTree>
         <IfController guiclass="IfControllerPanel" testclass="IfController" testname="奇数线程-无token裸脚本" enabled="true">
@@ -809,24 +805,24 @@ if (!allowed.contains(r.code)) {
         </IfController>
         <hashTree>
           <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="S5-裸脚本攻击(无token)" enabled="true">
+            <stringProp name="HTTPSampler.domain">${HOST}</stringProp>
+            <stringProp name="HTTPSampler.port">${GPORT}</stringProp>
+            <stringProp name="HTTPSampler.protocol">http</stringProp>
+            <stringProp name="HTTPSampler.contentEncoding">UTF-8</stringProp>
+            <stringProp name="HTTPSampler.path">/api/member/order/create</stringProp>
+            <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+            <stringProp name="HTTPSampler.method">POST</stringProp>
+            <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
             <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
             <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
               <collectionProp name="Arguments.arguments">
-                <elementProp name="" elementType="Argument">
-                  <stringProp name="Argument.value">{"rideDate":"${RIDE_DATE}","trainCode":"${TRAIN_CODE}","fromStation":"${FROM_ST}","toStation":"${TO_ST}","seatType":${SEAT_TYPE},"passengerIds":[1]}</stringProp>
+                <elementProp name="" elementType="HTTPArgument">
+                  <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                  <stringProp name="Argument.value">{&quot;rideDate&quot;:&quot;${RIDE_DATE}&quot;,&quot;trainCode&quot;:&quot;${TRAIN_CODE}&quot;,&quot;fromStation&quot;:&quot;${FROM_ST}&quot;,&quot;toStation&quot;:&quot;${TO_ST}&quot;,&quot;seatType&quot;:${SEAT_TYPE},&quot;passengerIds&quot;:[1]}</stringProp>
                   <stringProp name="Argument.metadata">=</stringProp>
                 </elementProp>
               </collectionProp>
             </elementProp>
-            <stringProp name="HTTPSampler.domain">${HOST}</stringProp>
-            <stringProp name="HTTPSampler.port">${GPORT}</stringProp>
-            <stringProp name="HTTPSampler.protocol">http</stringProp>
-            <stringProp name="HTTPSampler.path">/api/member/order/create</stringProp>
-            <stringProp name="HTTPSampler.method">POST</stringProp>
-            <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
-            <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
-            <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
-            <stringProp name="HTTPSampler.contentEncoding">UTF-8</stringProp>
           </HTTPSamplerProxy>
           <hashTree>
             <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="头-仅ContentType" enabled="true">
@@ -844,11 +840,11 @@ if (!allowed.contains(r.code)) {
               <stringProp name="filename"></stringProp>
               <stringProp name="cacheKey">true</stringProp>
               <stringProp name="script">def code = new groovy.json.JsonSlurper().parseText(prev.getResponseDataAsString()).code
-if ("401".equals(prev.getResponseCode()) &amp;&amp; (code == 40100 || code == 40101)) {
+if (&quot;401&quot;.equals(prev.getResponseCode()) &amp;&amp; (code == 40100 || code == 40101)) {
   prev.setSuccessful(true)
 } else {
   AssertionResult.setFailure(true)
-  AssertionResult.setFailureMessage("裸脚本应被 JWT 层拦截(401/40100)，实际 " + prev.getResponseCode() + "/" + code)
+  AssertionResult.setFailureMessage(&quot;裸脚本应被 JWT 层拦截(401/40100)，实际 &quot; + prev.getResponseCode() + &quot;/&quot; + code)
 }</stringProp>
             </JSR223Assertion>
             <hashTree/>
@@ -861,24 +857,24 @@ if ("401".equals(prev.getResponseCode()) &amp;&amp; (code == 40100 || code == 40
         </IfController>
         <hashTree>
           <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="S5-持token高频攻击" enabled="true">
+            <stringProp name="HTTPSampler.domain">${HOST}</stringProp>
+            <stringProp name="HTTPSampler.port">${GPORT}</stringProp>
+            <stringProp name="HTTPSampler.protocol">http</stringProp>
+            <stringProp name="HTTPSampler.contentEncoding">UTF-8</stringProp>
+            <stringProp name="HTTPSampler.path">/api/member/order/create</stringProp>
+            <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+            <stringProp name="HTTPSampler.method">POST</stringProp>
+            <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
             <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
             <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
               <collectionProp name="Arguments.arguments">
-                <elementProp name="" elementType="Argument">
-                  <stringProp name="Argument.value">{"rideDate":"${RIDE_DATE}","trainCode":"${TRAIN_CODE}","fromStation":"${FROM_ST}","toStation":"${TO_ST}","seatType":${SEAT_TYPE},"passengerIds":[1]}</stringProp>
+                <elementProp name="" elementType="HTTPArgument">
+                  <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                  <stringProp name="Argument.value">{&quot;rideDate&quot;:&quot;${RIDE_DATE}&quot;,&quot;trainCode&quot;:&quot;${TRAIN_CODE}&quot;,&quot;fromStation&quot;:&quot;${FROM_ST}&quot;,&quot;toStation&quot;:&quot;${TO_ST}&quot;,&quot;seatType&quot;:${SEAT_TYPE},&quot;passengerIds&quot;:[1]}</stringProp>
                   <stringProp name="Argument.metadata">=</stringProp>
                 </elementProp>
               </collectionProp>
             </elementProp>
-            <stringProp name="HTTPSampler.domain">${HOST}</stringProp>
-            <stringProp name="HTTPSampler.port">${GPORT}</stringProp>
-            <stringProp name="HTTPSampler.protocol">http</stringProp>
-            <stringProp name="HTTPSampler.path">/api/member/order/create</stringProp>
-            <stringProp name="HTTPSampler.method">POST</stringProp>
-            <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
-            <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
-            <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
-            <stringProp name="HTTPSampler.contentEncoding">UTF-8</stringProp>
           </HTTPSamplerProxy>
           <hashTree>
             <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="头-账号A token+随机指纹" enabled="true">
@@ -893,7 +889,7 @@ if ("401".equals(prev.getResponseCode()) &amp;&amp; (code == 40100 || code == 40
                 </elementProp>
                 <elementProp name="" elementType="Header">
                   <stringProp name="Header.name">X-Device-Id</stringProp>
-                  <stringProp name="Header.value">${__groovy('dev-'+UUID.randomUUID())}</stringProp>
+                  <stringProp name="Header.value">${__groovy(&apos;dev-&apos;+UUID.randomUUID())}</stringProp>
                 </elementProp>
               </collectionProp>
             </HeaderManager>
@@ -913,14 +909,14 @@ if (allowed.contains(code)) {
   prev.setSuccessful(true)
 } else {
   AssertionResult.setFailure(true)
-  AssertionResult.setFailureMessage("混战攻击 code=" + code + " 不在四层拦截集合内，0=成单说明被穿透")
+  AssertionResult.setFailureMessage(&quot;混战攻击 code=&quot; + code + &quot; 不在四层拦截集合内，0=成单说明被穿透&quot;)
 }</stringProp>
             </JSR223Assertion>
             <hashTree/>
           </hashTree>
         </hashTree>
       </hashTree>
-      <ResultCollector guiclass="ViewResultsFullVisualizer" testclass="ResultCollector" testname="查看结果树(GUI调试用)" enabled="true">
+      <ResultCollector guiclass="ViewResultsFullVisualizer" testclass="ResultCollector" testname="查看结果树(GUI调试用)">
         <boolProp name="ResultCollector.error_logging">false</boolProp>
         <objProp>
           <name>saveConfig</name>
@@ -957,7 +953,7 @@ if (allowed.contains(code)) {
         <stringProp name="filename"></stringProp>
       </ResultCollector>
       <hashTree/>
-      <ResultCollector guiclass="SummaryReport" testclass="ResultCollector" testname="聚合报告" enabled="true">
+      <ResultCollector guiclass="SummaryReport" testclass="ResultCollector" testname="聚合报告">
         <boolProp name="ResultCollector.error_logging">false</boolProp>
         <objProp>
           <name>saveConfig</name>
